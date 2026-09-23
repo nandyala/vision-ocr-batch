@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  TEMPLATE FOR A NEW DOC TYPE
-  1. Copy to <your-doc-type>.xml in this folder (only *.xml files are loaded).
-  2. Train/label in Azure: add a class to the classifier + train an extraction model.
-  3. Fill in classifierLabels, modelId and the field list below. No Java change needed.
+  TEMPLATE FOR A NEW DOC TYPE - copy to <your-doc-type>.xml in this folder (only *.xml files are loaded).
+
+  Minimum: docType + modelId (+ classifierLabels if you use a classifier).
+  Every field the Azure model returns is then stored automatically in DOC_FIELD and
+  DOC_JOB.EXTRACTED_JSON under its Azure field name - no Java, schema or XML field list needed.
+
+  Add a FieldMapping only for fields that need a different name, cleanup (normalizers),
+  validation, a confidence threshold, or must be present (required).
 -->
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -21,28 +25,26 @@
         <property name="modelId" value="${doctype.dispute.model-id:dispute-neural-v1}"/>
         <property name="minClassifyConfidence" value="0.80"/>
 
+        <!-- Store all fields returned by the model (default true) -->
+        <property name="includeUnmappedFields" value="true"/>
+        <!-- Send to REVIEW when any field without rules is below this confidence (0 = off) -->
+        <property name="defaultMinConfidence" value="0.0"/>
+
+        <!-- OPTIONAL: rules for specific fields -->
         <property name="fields">
             <list>
                 <bean class="com.visionocr.config.FieldMapping">
                     <property name="azureField" value="AccountNumber"/>
-                    <property name="canonicalField" value="accountNumber"/>
+                    <property name="canonicalField" value="accountNumber"/>   <!-- optional rename -->
                     <property name="required" value="true"/>
-                    <property name="sensitive" value="true"/>
                     <property name="minConfidence" value="0.85"/>
                     <property name="normalizers"><list><ref bean="norm.digits"/></list></property>
                 </bean>
                 <bean class="com.visionocr.config.FieldMapping">
                     <property name="azureField" value="DisputeDate"/>
-                    <property name="canonicalField" value="disputeDate"/>
                     <property name="required" value="true"/>
                     <property name="normalizers"><list><ref bean="norm.date"/></list></property>
                     <property name="validators"><list><ref bean="val.isoDate"/></list></property>
-                </bean>
-                <bean class="com.visionocr.config.FieldMapping">
-                    <property name="azureField" value="DisputedAmount"/>
-                    <property name="canonicalField" value="disputedAmount"/>
-                    <property name="required" value="true"/>
-                    <property name="normalizers"><list><ref bean="norm.amount"/></list></property>
                 </bean>
                 <!-- Table rows are flattened as  Transactions[0].Amount, Transactions[1].Amount ... -->
             </list>

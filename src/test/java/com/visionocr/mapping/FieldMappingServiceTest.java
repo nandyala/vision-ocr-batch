@@ -26,7 +26,6 @@ class FieldMappingServiceTest {
         routing.setAzureField("RoutingNumber");
         routing.setCanonicalField("routingNumber");
         routing.setRequired(true);
-        routing.setSensitive(true);
         routing.setMinConfidence(0.9);
         routing.setNormalizers(List.of(new DigitsOnlyNormalizer()));
         routing.setValidators(List.of(new AbaRoutingNumberValidator()));
@@ -93,5 +92,28 @@ class FieldMappingServiceTest {
         DocumentRecord doc = new DocumentRecord();
         service.map(config(), doc, output("021000021", 0.97, "Maria Lopez", "Robert Lopez"), null);
         assertEquals(List.of("NAME_MISMATCH"), doc.getReviewReasons());
+    }
+
+    @Test
+    void unmappedFieldsArePassedThrough() {
+        DocumentRecord doc = new DocumentRecord();
+        ExtractionOutput out = output("021000021", 0.97, "Ann Smith", "Ann Smith");
+        out.getFields().put("ReferenceCode", new RawField("ReferenceCode", "  REF-123 ", null, 0.91, "string"));
+        MappedDocument m = service.map(config(), doc, out, null);
+
+        MappedField extra = m.getFields().stream().filter(f -> f.getName().equals("ReferenceCode")).findFirst().orElseThrow();
+        assertEquals("REF-123", extra.getValue());
+        assertEquals(false, extra.isConfigured());
+        assertEquals(4, m.getFields().size(), "3 configured + 1 pass-through");
+        assertTrue(doc.getReviewReasons().isEmpty(), doc.getReviewReasons().toString());
+    }
+
+    @Test
+    void unmappedFieldsCanBeSwitchedOff() {
+        DocTypeConfig c = config();
+        c.setIncludeUnmappedFields(false);
+        ExtractionOutput out = output("021000021", 0.97, "Ann Smith", "Ann Smith");
+        out.getFields().put("ReferenceCode", new RawField("ReferenceCode", "REF-123", null, 0.91, "string"));
+        assertEquals(3, service.map(c, new DocumentRecord(), out, null).getFields().size());
     }
 }

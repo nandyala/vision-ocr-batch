@@ -85,7 +85,7 @@ public class RecoveryTasklet implements Tasklet {
             jdbc.update("DELETE FROM doc_field WHERE doc_id IN (SELECT id FROM doc_job" + where + ")", args.toArray());
 
             String reset = "UPDATE doc_job SET status = ?, failed_stage = NULL, retry_count = 0, next_retry_at = NULL, "
-                    + "last_error = NULL, review_reasons = NULL, updated_at = CURRENT_TIMESTAMP";
+                    + "last_error = NULL, review_reasons = NULL, extracted_json = NULL, updated_at = CURRENT_TIMESTAMP";
             if (stage == Stage.CLASSIFY) {
                 // Re-classify from scratch unless the doc type came from the input folder.
                 reset += ", doc_type = CASE WHEN classifier_label = '" + ClassifyProcessor.FOLDER_HINT

@@ -169,7 +169,6 @@ Set these as environment variables (or in an external `application.properties` p
 export AZURE_DI_ENDPOINT="https://di-vision-ocr-dev.cognitiveservices.azure.com/"
 export AZURE_DI_KEY="<key>"                      # omit to use managed identity / az login
 export AZURE_DI_CLASSIFIER_ID="vision-ocr-classifier-v1"
-export FIELD_ENCRYPTION_KEY="$(openssl rand -base64 32)"   # store it; you need it to decrypt later
 # model id per doc type:
 java -Ddoctype.auto-pay-auth.model-id=autopay-neural-v1 -jar target/vision-ocr-batch.jar job-context.xml docExtractionJob -next
 ```
@@ -184,7 +183,7 @@ disable local (key) authentication on the resource.
 ## 8. Check accuracy against your historical data
 
 1. Put the test-set files in `data/input/` and run the job.
-2. Compare `doc_field` (decrypt the sensitive values) with the known values: field-level exact-match
+2. Compare `doc_field` with the known values: field-level exact-match
    rate, and the review rate per reason.
 3. Tune:
    * Many `LOW_CONFIDENCE:*` on correct values → lower that field's `minConfidence`.
@@ -219,7 +218,7 @@ disable local (key) authentication on the resource.
 
 - [ ] Keys in Key Vault (or keyless with managed identity + local auth disabled)
 - [ ] Private endpoint for Document Intelligence and Storage in prod
-- [ ] `FIELD_ENCRYPTION_KEY` in Key Vault; DB encryption at rest (TDE) on too
+- [ ] Database encryption at rest (TDE / disk encryption) and restricted DB access
 - [ ] Training containers private; access limited to the labelling team
 - [ ] Diagnostic settings → Log Analytics (request counts, throttling, 429s)
 - [ ] Check your resource's **transactions-per-second quota** and set `azure.concurrency` below it

@@ -27,7 +27,7 @@ The first doc type is `AUTO_PAY_AUTH` (Automatic Payment Authorization Agreement
                           → full JSON + fields stored in DOC_AZURE_RESULT
         │
  ④ mapValidateStep ────── doc type XML: normalize → validate → cross-field rules COMPLETED | REVIEW
-        │                 → DOC_FIELD (sensitive values encrypted + masked)
+        │                 → DOC_FIELD (one row per field) + DOC_JOB.EXTRACTED_JSON
  ⑤ summaryStep ────────── counts per doc type / status
 
  any failure ─► ERROR (retried automatically with back-off) or FAILED (operator reprocess)
@@ -66,7 +66,6 @@ src/main/java/com/visionocr/
   config/      DocTypeConfig, FieldMapping, DocTypeRegistry
   mapping/     FieldMappingService + normalizers
   validation/  field validators + cross-field rules (ABA checksum, fuzzy name match...)
-  security/    AES-GCM field encryption, masking
 scripts/azure-train.sh        train model/classifier via REST
 ops/operations.sql            monitoring, reprocess, correction and housekeeping queries
 ```
@@ -79,7 +78,7 @@ Requirements: **JDK 17+**, **Maven 3.9+**.
 mvn clean package              # runs unit + end-to-end tests (offline: synthetic data, stubbed Azure, in-memory H2)
 
 ./run.sh                       # real Azure: set AZURE_DI_ENDPOINT, AZURE_DI_KEY (or managed identity),
-                               #             AZURE_DI_CLASSIFIER_ID, FIELD_ENCRYPTION_KEY
+                               #             AZURE_DI_CLASSIFIER_ID (optional)
 ```
 
 Direct launch (Spring Batch `CommandLineJobRunner`):
@@ -93,7 +92,7 @@ Look at the results (H2 console, or any SQL client on `./data/db/*.mv.db`):
 
 ```sql
 SELECT id, file_name, doc_type, status, review_reasons, failed_stage, next_retry_at FROM doc_job ORDER BY id;
-SELECT field_name, display_value, confidence, field_status, message FROM doc_field WHERE doc_id = 1;
+SELECT field_name, field_value, confidence, field_status, message FROM doc_field WHERE doc_id = 1;
 SELECT stage, from_status, to_status, note FROM doc_status_history WHERE doc_id = 1 ORDER BY id;
 ```
 
@@ -160,30 +159,29 @@ FROM doc_job ORDER BY id;
 ```
 
 Extracted fields of one document (`field_status` = OK | MISSING | LOW_CONFIDENCE | INVALID,
-`message` says why; sensitive values are masked in `display_value` and encrypted in `field_value`):
+`message` says why; `configured` = the field has rules in the doc type XML, `raw_value` = before cleanup):
 
 ```sql
-SELECT field_name, display_value, confidence, field_status, message
+SELECT field_name, field_value, raw_value, confidence, field_status, message, configured
 FROM doc_field WHERE doc_id = 1 ORDER BY field_name;
 ```
 
-One row per document with all fields side by side (reviewer corrections win over model values):
+All extracted values of every document as one JSON object (works for any doc type, no field names needed):
 
 ```sql
-SELECT j.id, j.file_name, j.status,
-  MAX(CASE WHEN f.field_name = 'customerName'          THEN f.display_value END) AS customer_name,
-  MAX(CASE WHEN f.field_name = 'lenderAccountNumber'   THEN f.display_value END) AS account_no,
-  MAX(CASE WHEN f.field_name = 'bankAccountHolderName' THEN f.display_value END) AS holder,
-  MAX(CASE WHEN f.field_name = 'bankName'              THEN f.display_value END) AS bank,
-  MAX(CASE WHEN f.field_name = 'routingNumber'         THEN f.display_value END) AS routing,
-  MAX(CASE WHEN f.field_name = 'checkingAccountNumber' THEN f.display_value END) AS checking,
-  MAX(CASE WHEN f.field_name = 'signature'             THEN f.display_value END) AS signature
-FROM doc_job j LEFT JOIN v_doc_field_final f ON f.doc_id = j.id
-GROUP BY j.id, j.file_name, j.status ORDER BY j.id;
+SELECT id, file_name, doc_type, status, extracted_json FROM doc_job ORDER BY id;
+```
+
+All fields of all documents as rows, with reviewer corrections applied (generic for every doc type):
+
+```sql
+SELECT j.id, j.file_name, j.doc_type, f.field_name, f.final_value, f.value_source, f.confidence, f.field_status
+FROM doc_job j JOIN v_doc_field_final f ON f.doc_id = j.id
+ORDER BY j.id, f.field_name;
 ```
 
 Exactly what Azure returned, including fields the job does not map (`fields_json` is plain JSON
-while no `security.field-encryption-key` is set; the full Azure response is in `result_json`):
+the full Azure response is in `result_json`):
 
 ```sql
 SELECT id, model_id, doc_confidence, fields_json
@@ -210,7 +208,12 @@ VALUES ('MAP', 'AUTO_PAY_AUTH', 'REVIEW', 'field names aligned', 'me');
 
 More queries: `ops/operations.sql`.
 
-## Adding a document type (no Java changes)
+## Adding a document type (no Java or schema changes)
+
+The data structure is generic: every field the Azure model returns is stored as a row in `doc_field`
+and in `doc_job.extracted_json`, whatever the doc type. A new doc type with different fields needs
+no table changes and, at minimum, only `docType` + `modelId` (+ `classifierLabels`) in its XML.
+The field list in the XML is optional and only adds rules (rename, cleanup, validation, required).
 
 1. **Azure:** train an extraction model for it, and add its class to the classifier (AZURE_SETUP.md §10).
 2. Copy `doctypes/_doctype-template.xml.example` to `doctypes/<name>.xml` and set:
@@ -218,7 +221,7 @@ More queries: `ops/operations.sql`.
    * `classifierLabels`: the classifier class name(s) that mean this doc type
    * `modelId`: the extraction model
    * `fields`: one `FieldMapping` per field: `azureField` (label name in the Studio) →
-     `canonicalField`, `required`, `sensitive`, `minConfidence`, `normalizers`, `validators`
+     `canonicalField`, `required`, `minConfidence`, `normalizers`, `validators`
    * `crossFieldRules`: optional
 3. Build and run. `DocTypeRegistry` picks up every `DocTypeConfig` bean automatically.
 
@@ -241,19 +244,17 @@ See `src/main/resources/application.properties`. Key settings:
 | `azure.api-key` | `AZURE_DI_KEY` | empty = Entra ID (managed identity / az login) |
 | `azure.classifier-id` | `AZURE_DI_CLASSIFIER_ID` | custom classifier id |
 | `doctype.auto-pay-auth.model-id` | – | extraction model for AUTO_PAY_AUTH (currently `autopay-neural-v2`) |
-| `security.field-encryption-key` | `FIELD_ENCRYPTION_KEY` | base64 AES-256 key for sensitive fields |
 | `reference.routing-directory-csv` | – | optional `routing,bankName` CSV for the bank-name cross-check |
 | `retry.max-attempts` / `retry.base-delay-minutes` / `retry.max-delay-minutes` | – | automatic retry and back-off |
 | `results.store-full-json` | – | keep the full Azure JSON (`false` = simplified fields only) |
 
 ## Security notes
 
-* Fields marked `sensitive` (routing and account numbers) are AES-GCM encrypted in
-  `doc_field.field_value` and masked in `display_value`. The Azure JSON in `doc_azure_result` is
-  encrypted too.
+* Extracted values and Azure JSON are stored in plain text. Protect the database itself: access
+  control, encryption at rest (e.g. PostgreSQL/disk encryption), backups.
 * Logs never contain field values, only document ids, statuses and reason codes.
-* Without `FIELD_ENCRYPTION_KEY`, values are stored in clear text and a warning is logged. Don't run
-  real data like that.
+* Secrets (Azure key, DB password) come from environment variables or `application-local.properties`,
+  which is git-ignored.
 
 ## Known limits / next steps
 

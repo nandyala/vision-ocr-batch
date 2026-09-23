@@ -18,8 +18,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -34,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class EndToEndJobTest {
 
-    private static final String[] PROPS = {"config.file", "db.url", "input.dir", "security.field-encryption-key",
+    private static final String[] PROPS = {"config.file", "db.url", "input.dir",
             "retry.base-delay-minutes", "azure.endpoint", "azure.classifier-id"};
 
     private static ClassPathXmlApplicationContext ctx;
@@ -46,13 +44,9 @@ class EndToEndJobTest {
         Path input = work.resolve("input");
         createInputs(input);
 
-        byte[] key = new byte[32];
-        new SecureRandom().nextBytes(key);
-
         System.setProperty("config.file", work.resolve("none.properties").toString());
         System.setProperty("db.url", "jdbc:h2:mem:e2e;MODE=PostgreSQL;DB_CLOSE_DELAY=-1");
         System.setProperty("input.dir", input.toString());
-        System.setProperty("security.field-encryption-key", Base64.getEncoder().encodeToString(key));
         System.setProperty("retry.base-delay-minutes", "0");   // retry immediately on the next run
         System.setProperty("azure.endpoint", "https://unused.example");
         System.setProperty("azure.classifier-id", "test-classifier");
@@ -81,7 +75,8 @@ class EndToEndJobTest {
             + "\"BankName\":{\"value\":\"Example Bank\",\"confidence\":0.93},"
             + "\"RoutingNumber\":{\"value\":\"0110-0001-5\",\"confidence\":0.96},"
             + "\"CheckingAccountNumber\":{\"value\":\"1234 5678 90\",\"confidence\":0.95},"
-            + "\"Signature\":{\"value\":\"signed\",\"type\":\"signature\",\"confidence\":0.90}";
+            + "\"Signature\":{\"value\":\"signed\",\"type\":\"signature\",\"confidence\":0.90},"
+            + "\"ReferenceCode\":{\"value\":\" REF-2024-001 \",\"confidence\":0.89}";   // not declared in XML
 
     private static void createInputs(Path input) throws IOException {
         // all fields valid -> COMPLETED
@@ -139,16 +134,25 @@ class EndToEndJobTest {
         assertTrue(reasons.contains("LOW_CONFIDENCE:checkingAccountNumber"), reasons);
         assertTrue(reasons.contains("ACCOUNT_HOLDER_NAME_MISMATCH"), reasons);
 
-        // Sensitive values encrypted at rest, masked for display
-        Map<String, Object> routing = jdbc.queryForMap("SELECT f.field_value, f.display_value FROM doc_field f "
-                + "JOIN doc_job j ON j.id = f.doc_id WHERE j.file_name = 'typed-good.pdf' AND f.field_name = 'routingNumber'");
-        assertEquals("*****0015", routing.get("display_value"));
-        assertTrue(((String) routing.get("field_value")).startsWith("enc:v1:"));
+        // Values stored as plain text; configured fields normalized
+        assertEquals("011000015", jdbc.queryForObject("SELECT f.field_value FROM doc_field f JOIN doc_job j ON j.id = f.doc_id "
+                + "WHERE j.file_name = 'typed-good.pdf' AND f.field_name = 'routingNumber'", String.class));
 
-        // Azure JSON stored per call, encrypted
+        // Fields not declared in the doc type XML are stored too, under their Azure name
+        Map<String, Object> extra = jdbc.queryForMap("SELECT f.field_value, f.configured FROM doc_field f "
+                + "JOIN doc_job j ON j.id = f.doc_id WHERE j.file_name = 'typed-good.pdf' AND f.field_name = 'ReferenceCode'");
+        assertEquals("REF-2024-001", extra.get("field_value"));
+        assertEquals(Boolean.FALSE, extra.get("configured"));
+
+        // One JSON object per document with all extracted values
+        String extracted = jdbc.queryForObject("SELECT extracted_json FROM doc_job WHERE file_name = 'typed-good.pdf'", String.class);
+        assertTrue(extracted.contains("\"routingNumber\":\"011000015\""), extracted);
+        assertTrue(extracted.contains("\"ReferenceCode\":\"REF-2024-001\""), extracted);
+
+        // Azure JSON stored per call as plain JSON
         String fieldsJson = jdbc.queryForObject("SELECT r.fields_json FROM doc_azure_result r JOIN doc_job j ON j.id = r.doc_id "
                 + "WHERE j.file_name = 'typed-good.pdf' AND r.operation = 'EXTRACT' AND r.is_current = TRUE", String.class);
-        assertTrue(fieldsJson.startsWith("enc:v1:"));
+        assertTrue(fieldsJson.startsWith("{"), fieldsJson);
 
         // Errors recorded with retryable flag
         assertEquals(Boolean.TRUE, jdbc.queryForObject("SELECT e.retryable FROM doc_error e JOIN doc_job j ON j.id = e.doc_id "
@@ -194,9 +198,9 @@ class EndToEndJobTest {
     void correctionWinsInFinalView() {
         Long id = jdbc.queryForObject("SELECT id FROM doc_job WHERE file_name = 'typed-good.pdf'", Long.class);
         assertEquals("JANE DOE", jdbc.queryForObject(
-                "SELECT display_value FROM doc_field WHERE doc_id = ? AND field_name = 'customerName'", String.class, id));
-        jdbc.update("INSERT INTO doc_field_correction (doc_id, field_name, original_value, corrected_value, display_value, "
-                + "reason, corrected_by) VALUES (?, 'customerName', 'JANE DOE', 'JANE A DOE', 'JANE A DOE', "
+                "SELECT field_value FROM doc_field WHERE doc_id = ? AND field_name = 'customerName'", String.class, id));
+        jdbc.update("INSERT INTO doc_field_correction (doc_id, field_name, original_value, corrected_value, "
+                + "reason, corrected_by) VALUES (?, 'customerName', 'JANE DOE', 'JANE A DOE', "
                 + "'OCR_MISREAD', 'reviewer1')", id);
         Map<String, Object> row = jdbc.queryForMap("SELECT final_value, value_source FROM v_doc_field_final "
                 + "WHERE doc_id = ? AND field_name = 'customerName'", id);

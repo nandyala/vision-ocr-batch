@@ -6,14 +6,15 @@ import com.visionocr.domain.DocStatus;
 import com.visionocr.domain.DocumentRecord;
 import com.visionocr.domain.MappedField;
 import com.visionocr.domain.Stage;
-import com.visionocr.security.FieldEncryptor;
-import com.visionocr.security.Masking;
+import com.visionocr.util.Json;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.sql.Timestamp;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * All writes of pipeline state. Called from ItemWriters, so everything for a chunk
@@ -29,13 +30,11 @@ public class DocumentRepository {
             + "WHERE id = ?";
 
     private final JdbcTemplate jdbc;
-    private final FieldEncryptor encryptor;
     private final RetryPolicy retryPolicy;
     private final boolean storeFullJson;
 
-    public DocumentRepository(JdbcTemplate jdbc, FieldEncryptor encryptor, RetryPolicy retryPolicy, boolean storeFullJson) {
+    public DocumentRepository(JdbcTemplate jdbc, RetryPolicy retryPolicy, boolean storeFullJson) {
         this.jdbc = jdbc;
-        this.encryptor = encryptor;
         this.retryPolicy = retryPolicy;
         this.storeFullJson = storeFullJson;
     }
@@ -96,8 +95,7 @@ public class DocumentRepository {
         jdbc.update("INSERT INTO doc_azure_result (doc_id, operation, model_id, api_version, doc_confidence, "
                         + "result_json, fields_json, duration_ms, is_current) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)",
                 docId, r.getOperation(), r.getModelId(), AzureCallResult.API_VERSION, r.getDocConfidence(),
-                storeFullJson ? encryptor.encrypt(r.getResultJson()) : null,
-                encryptor.encrypt(r.getFieldsJson()), r.getDurationMs());
+                storeFullJson ? r.getResultJson() : null, r.getFieldsJson(), r.getDurationMs());
     }
 
     public void insertHistory(long docId, DocStatus from, DocStatus to, String stage, String note) {
@@ -105,26 +103,31 @@ public class DocumentRepository {
                 docId, from == null ? null : from.name(), to.name(), stage, truncate(note, 1990));
     }
 
-    /** Current extraction (id + decrypted simplified fields JSON), or null if the document was never extracted. */
+    /** Current extraction (id + simplified fields JSON), or null if the document was never extracted. */
     public CurrentExtraction currentExtraction(long docId) {
         List<CurrentExtraction> rows = jdbc.query(
                 "SELECT id, fields_json FROM doc_azure_result WHERE doc_id = ? AND operation = 'EXTRACT' AND is_current = TRUE",
-                (rs, n) -> new CurrentExtraction(rs.getLong("id"), encryptor.decrypt(rs.getString("fields_json"))),
+                (rs, n) -> new CurrentExtraction(rs.getLong("id"), rs.getString("fields_json")),
                 docId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
-    /** Replaces the canonical fields of a document. */
+    /**
+     * Replaces the extracted fields of a document: one DOC_FIELD row per field, plus
+     * DOC_JOB.EXTRACTED_JSON = {"fieldName": "value", ...} for easy consumption.
+     */
     public void replaceFields(DocumentRecord d, Long resultId, List<MappedField> fields) {
         jdbc.update("DELETE FROM doc_field WHERE doc_id = ?", d.getId());
+        Map<String, String> json = new LinkedHashMap<>();
         for (MappedField f : fields) {
-            jdbc.update("INSERT INTO doc_field (doc_id, result_id, doc_type, field_name, field_value, display_value, "
-                            + "confidence, field_status, message, sensitive) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    d.getId(), resultId, d.getDocType(), f.getName(),
-                    f.isSensitive() ? encryptor.encrypt(f.getValue()) : f.getValue(),
-                    f.isSensitive() ? Masking.mask(f.getValue()) : f.getValue(),
-                    f.getConfidence(), f.getStatus().name(), f.getMessage(), f.isSensitive());
+            jdbc.update("INSERT INTO doc_field (doc_id, result_id, doc_type, field_name, azure_field, field_value, "
+                            + "raw_value, confidence, field_status, message, configured) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    d.getId(), resultId, d.getDocType(), truncate(f.getName(), 200), truncate(f.getAzureField(), 200),
+                    truncate(f.getValue(), 4000), truncate(f.getRawValue(), 4000), f.getConfidence(),
+                    f.getStatus().name(), truncate(f.getMessage(), 500), f.isConfigured());
+            json.put(f.getName(), f.getValue());
         }
+        jdbc.update("UPDATE doc_job SET extracted_json = ? WHERE id = ?", Json.write(json), d.getId());
     }
 
     private static String truncate(String s, int max) {

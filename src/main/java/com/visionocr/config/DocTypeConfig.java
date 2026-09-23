@@ -7,8 +7,9 @@ import java.util.List;
 
 /**
  * Everything the pipeline needs to know about one document type.
- * One XML file per doc type in src/main/resources/doctypes/ - adding a doc type
- * never requires a Java change unless it needs a brand-new normalizer/validator.
+ * One XML file per doc type in src/main/resources/doctypes/. Minimum: docType, classifierLabels
+ * (if a classifier is used) and modelId - every field the model returns is then stored as-is.
+ * Add FieldMappings only for fields that need renaming, cleanup, validation or are required.
  */
 public class DocTypeConfig {
 
@@ -21,8 +22,13 @@ public class DocTypeConfig {
     private String modelId;
     private double minClassifyConfidence = 0.70;
     private double minDocumentConfidence = 0.0;
+    /** Optional per-field rules. Fields without rules are still stored when includeUnmappedFields = true. */
     private List<FieldMapping> fields = new ArrayList<>();
     private List<CrossFieldRule> crossFieldRules = new ArrayList<>();
+    /** Store every field the model returns, not only the ones declared in {@link #fields}. */
+    private boolean includeUnmappedFields = true;
+    /** Minimum confidence for fields without rules (0 = no check). */
+    private double defaultMinConfidence = 0.0;
 
     public String getDocType() { return docType; }
     public void setDocType(String docType) { this.docType = docType; }
@@ -40,6 +46,10 @@ public class DocTypeConfig {
     public void setMinDocumentConfidence(double minDocumentConfidence) { this.minDocumentConfidence = minDocumentConfidence; }
     public List<FieldMapping> getFields() { return fields; }
     public void setFields(List<FieldMapping> fields) { this.fields = fields; }
+    public boolean isIncludeUnmappedFields() { return includeUnmappedFields; }
+    public void setIncludeUnmappedFields(boolean includeUnmappedFields) { this.includeUnmappedFields = includeUnmappedFields; }
+    public double getDefaultMinConfidence() { return defaultMinConfidence; }
+    public void setDefaultMinConfidence(double defaultMinConfidence) { this.defaultMinConfidence = defaultMinConfidence; }
     public List<CrossFieldRule> getCrossFieldRules() { return crossFieldRules; }
     public void setCrossFieldRules(List<CrossFieldRule> crossFieldRules) { this.crossFieldRules = crossFieldRules; }
 }

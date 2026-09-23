@@ -7,11 +7,6 @@
     <!-- ===== Doc type registry: collects every DocTypeConfig bean (see doctypes/*.xml) ===== -->
     <bean id="docTypeRegistry" class="com.visionocr.config.DocTypeRegistry" autowire="constructor"/>
 
-    <!-- ===== Security ===== -->
-    <bean id="fieldEncryptor" class="com.visionocr.security.AesGcmFieldEncryptor">
-        <constructor-arg value="${security.field-encryption-key}"/>
-    </bean>
-
     <!-- ===== Retry + persistence ===== -->
     <!-- args: maxAttempts, baseDelayMinutes, maxDelayMinutes -->
     <bean id="retryPolicy" class="com.visionocr.batch.RetryPolicy">
@@ -20,12 +15,11 @@
         <constructor-arg index="2" value="${retry.max-delay-minutes}"/>
     </bean>
 
-    <!-- args: jdbcTemplate, encryptor, retryPolicy, storeFullJson -->
+    <!-- args: jdbcTemplate, retryPolicy, storeFullJson -->
     <bean id="documentRepository" class="com.visionocr.repository.DocumentRepository">
         <constructor-arg index="0" ref="jdbcTemplate"/>
-        <constructor-arg index="1" ref="fieldEncryptor"/>
-        <constructor-arg index="2" ref="retryPolicy"/>
-        <constructor-arg index="3" value="${results.store-full-json}"/>
+        <constructor-arg index="1" ref="retryPolicy"/>
+        <constructor-arg index="2" value="${results.store-full-json}"/>
     </bean>
 
     <!-- ===== Step 0: recovery (reprocess requests + automatic retries) ===== -->

@@ -24,6 +24,8 @@
         <property name="modelId" value="${doctype.auto-pay-auth.model-id}"/>
         <property name="minClassifyConfidence" value="0.80"/>
         <property name="minDocumentConfidence" value="0.60"/>
+        <!-- Store every field the model returns; the list below only adds rules for specific fields -->
+        <property name="includeUnmappedFields" value="true"/>
 
         <property name="fields">
             <list>
@@ -84,7 +86,6 @@
                     <property name="azureField" value="RoutingNumber"/>
                     <property name="canonicalField" value="routingNumber"/>
                     <property name="required" value="true"/>
-                    <property name="sensitive" value="true"/>
                     <property name="minConfidence" value="0.90"/>
                     <property name="normalizers">
                         <list><ref bean="norm.digits"/></list>
@@ -98,7 +99,6 @@
                     <property name="azureField" value="CheckingAccountNumber"/>
                     <property name="canonicalField" value="checkingAccountNumber"/>
                     <property name="required" value="true"/>
-                    <property name="sensitive" value="true"/>
                     <property name="minConfidence" value="0.90"/>
                     <property name="normalizers">
                         <list><ref bean="norm.digits"/></list>

@@ -61,13 +61,12 @@ SELECT id, from_stage, doc_id, doc_type, current_status, state, applied_count, m
 FROM doc_reprocess_request ORDER BY id DESC;
 
 -- ---------------------------------------------------------------- review / corrections
--- (a review UI should do this in one transaction; values of sensitive fields must be
---  encrypted by the application - use the app's FieldEncryptor, not plain SQL)
+-- (a review UI should do this in one transaction)
 
--- Correct a non-sensitive field
+-- Correct a field
 UPDATE doc_field_correction SET active = FALSE WHERE doc_id = :doc_id AND field_name = 'customerName' AND active = TRUE;
-INSERT INTO doc_field_correction (doc_id, field_name, original_value, corrected_value, display_value, reason, corrected_by)
-SELECT doc_id, field_name, field_value, 'JOHN Q SAMPLE', 'JOHN Q SAMPLE', 'OCR_MISREAD', 'reviewer1'
+INSERT INTO doc_field_correction (doc_id, field_name, original_value, corrected_value, reason, corrected_by)
+SELECT doc_id, field_name, field_value, 'JOHN Q SAMPLE', 'OCR_MISREAD', 'reviewer1'
 FROM doc_field WHERE doc_id = :doc_id AND field_name = 'customerName';
 
 -- Approve the document after review
@@ -76,7 +75,8 @@ SELECT id, status, 'COMPLETED', 'REVIEW', 'approved after correction', 'reviewer
 UPDATE doc_job SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP WHERE id = :doc_id AND status = 'REVIEW';
 
 -- What downstream systems read
-SELECT doc_id, field_name, final_value, display_value, value_source FROM v_doc_field_final WHERE doc_id = :doc_id;
+SELECT doc_id, field_name, final_value, value_source FROM v_doc_field_final WHERE doc_id = :doc_id;
+SELECT extracted_json FROM doc_job WHERE id = :doc_id;
 
 -- Correction rate per field (tells you what to retrain)
 SELECT j.doc_type, c.field_name, c.reason, COUNT(*) AS corrections
