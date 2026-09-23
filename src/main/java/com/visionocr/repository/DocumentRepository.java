@@ -4,6 +4,7 @@ import com.visionocr.batch.RetryPolicy;
 import com.visionocr.domain.AzureCallResult;
 import com.visionocr.domain.DocStatus;
 import com.visionocr.domain.DocumentRecord;
+import com.visionocr.domain.MappedDocument;
 import com.visionocr.domain.MappedField;
 import com.visionocr.domain.Stage;
 import com.visionocr.util.Json;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,8 +95,9 @@ public class DocumentRepository {
         // Booleans are bound as parameters: SQL Server has no TRUE/FALSE literals (BIT columns)
         jdbc.update("UPDATE ocr.doc_azure_result SET is_current = ? WHERE doc_id = ? AND operation = ? AND is_current = ?",
                 false, docId, r.getOperation(), true);
+        // Full Azure response stored GZIP-compressed by SQL Server (read back with CAST(DECOMPRESS(result_json_gz) AS NVARCHAR(MAX)))
         jdbc.update("INSERT INTO ocr.doc_azure_result (doc_id, operation, model_id, api_version, doc_confidence, "
-                        + "result_json, fields_json, duration_ms, is_current) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + "result_json_gz, fields_json, duration_ms, is_current) VALUES (?, ?, ?, ?, ?, COMPRESS(?), ?, ?, ?)",
                 docId, r.getOperation(), r.getModelId(), AzureCallResult.API_VERSION, r.getDocConfidence(),
                 storeFullJson ? r.getResultJson() : null, r.getFieldsJson(), r.getDurationMs(), true);
     }
@@ -113,22 +116,36 @@ public class DocumentRepository {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    private static final String INSERT_FIELD = "INSERT INTO ocr.doc_field (doc_id, result_id, doc_type, field_name, "
+            + "azure_field, field_value, raw_value, confidence, field_status, message, configured) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
     /**
-     * Replaces the extracted fields of a document: one DOC_FIELD row per field, plus
-     * DOC_JOB.EXTRACTED_JSON = {"fieldName": "value", ...} for easy consumption.
+     * Replaces the extracted fields of the given documents in few round trips: one DELETE per document,
+     * one batched INSERT for all fields of the chunk, one batched UPDATE of DOC_JOB.EXTRACTED_JSON.
      */
-    public void replaceFields(DocumentRecord d, Long resultId, List<MappedField> fields) {
-        jdbc.update("DELETE FROM ocr.doc_field WHERE doc_id = ?", d.getId());
-        Map<String, String> json = new LinkedHashMap<>();
-        for (MappedField f : fields) {
-            jdbc.update("INSERT INTO ocr.doc_field (doc_id, result_id, doc_type, field_name, azure_field, field_value, "
-                            + "raw_value, confidence, field_status, message, configured) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    d.getId(), resultId, d.getDocType(), truncate(f.getName(), 200), truncate(f.getAzureField(), 200),
-                    truncate(f.getValue(), 4000), truncate(f.getRawValue(), 4000), f.getConfidence(),
-                    f.getStatus().name(), truncate(f.getMessage(), 500), f.isConfigured());
-            json.put(f.getName(), f.getValue());
+    public void replaceFields(List<MappedDocument> docs) {
+        if (docs.isEmpty()) {
+            return;
         }
-        jdbc.update("UPDATE ocr.doc_job SET extracted_json = ? WHERE id = ?", Json.write(json), d.getId());
+        List<Object[]> fieldRows = new ArrayList<>();
+        List<Object[]> jsonRows = new ArrayList<>();
+        for (MappedDocument m : docs) {
+            DocumentRecord d = m.getRecord();
+            jdbc.update("DELETE FROM ocr.doc_field WHERE doc_id = ?", d.getId());
+            Map<String, String> json = new LinkedHashMap<>();
+            for (MappedField f : m.getFields()) {
+                fieldRows.add(new Object[] {d.getId(), m.getResultId(), d.getDocType(), truncate(f.getName(), 200),
+                        truncate(f.getAzureField(), 200), truncate(f.getValue(), 4000), truncate(f.getRawValue(), 4000),
+                        f.getConfidence(), f.getStatus().name(), truncate(f.getMessage(), 500), f.isConfigured()});
+                json.put(f.getName(), f.getValue());
+            }
+            jsonRows.add(new Object[] {Json.write(json), d.getId()});
+        }
+        if (!fieldRows.isEmpty()) {
+            jdbc.batchUpdate(INSERT_FIELD, fieldRows);
+        }
+        jdbc.batchUpdate("UPDATE ocr.doc_job SET extracted_json = ? WHERE id = ?", jsonRows);
     }
 
     private static String truncate(String s, int max) {

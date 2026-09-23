@@ -3,8 +3,10 @@
 --
 -- SAFE FOR AN EXISTING DATABASE:
 --   * every object lives in the dedicated schema "ocr" - nothing in dbo or other schemas is touched
---   * create-only: objects are created when missing; nothing is ever dropped or altered
+--   * additive only: missing tables, columns and indexes are created; nothing is ever dropped
 --     (the only CREATE OR ALTER is the view ocr.v_doc_field_final, owned by this job)
+--   * large tables are created with PAGE compression (SQL Server 2016 SP1+, all editions); for tables
+--     created by an earlier version see ops/operations.sql (REBUILD WITH DATA_COMPRESSION = PAGE)
 -- The job can run it at startup (db.init=true) or a DBA runs it once and sets db.init=false.
 --
 --   doc_job                 one row per input file = current state (the "work queue")
@@ -75,11 +77,18 @@ CREATE TABLE ocr.doc_azure_result (
     duration_ms     BIGINT        NULL,
     is_current      BIT           NOT NULL CONSTRAINT df_doc_azure_result_current DEFAULT 1,
     created_at      DATETIME2     NOT NULL CONSTRAINT df_doc_azure_result_created DEFAULT SYSDATETIME(),
+    result_json_gz  VARBINARY(MAX) NULL,                 -- full Azure response, COMPRESS()ed (GZIP)
     CONSTRAINT ck_doc_azure_result_op CHECK (operation IN ('CLASSIFY', 'EXTRACT'))
-);
+) WITH (DATA_COMPRESSION = PAGE);
+
+-- added in a later version: compressed copy of the Azure response (result_json is kept for older rows)
+IF COL_LENGTH(N'ocr.doc_azure_result', N'result_json_gz') IS NULL
+    ALTER TABLE ocr.doc_azure_result ADD result_json_gz VARBINARY(MAX) NULL;
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_azure_result_doc' AND object_id = OBJECT_ID(N'ocr.doc_azure_result'))
     CREATE INDEX ix_doc_azure_result_doc ON ocr.doc_azure_result (doc_id, operation, is_current);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_azure_result_at' AND object_id = OBJECT_ID(N'ocr.doc_azure_result'))
+    CREATE INDEX ix_doc_azure_result_at ON ocr.doc_azure_result (created_at);
 
 -- -----------------------------------------------------------------------------
 -- doc_field  (value_key = first 400 chars of the value, indexed for lookups by value)
@@ -101,10 +110,12 @@ CREATE TABLE ocr.doc_field (
     created_at    DATETIME2      NOT NULL CONSTRAINT df_doc_field_created DEFAULT SYSDATETIME(),
     value_key     AS CAST(LEFT(field_value, 400) AS NVARCHAR(400)) PERSISTED,
     CONSTRAINT uq_doc_field UNIQUE (doc_id, field_name)
-);
+) WITH (DATA_COMPRESSION = PAGE);
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_field_search' AND object_id = OBJECT_ID(N'ocr.doc_field'))
     CREATE INDEX ix_doc_field_search ON ocr.doc_field (field_name, value_key) INCLUDE (doc_id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_field_result' AND object_id = OBJECT_ID(N'ocr.doc_field'))
+    CREATE INDEX ix_doc_field_result ON ocr.doc_field (result_id);
 
 -- -----------------------------------------------------------------------------
 -- doc_field_correction
@@ -140,10 +151,12 @@ CREATE TABLE ocr.doc_status_history (
     note         NVARCHAR(2000) NULL,
     changed_by   NVARCHAR(100)  NOT NULL CONSTRAINT df_doc_status_history_by DEFAULT 'batch',
     changed_at   DATETIME2      NOT NULL CONSTRAINT df_doc_status_history_at DEFAULT SYSDATETIME()
-);
+) WITH (DATA_COMPRESSION = PAGE);
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_status_history_doc' AND object_id = OBJECT_ID(N'ocr.doc_status_history'))
     CREATE INDEX ix_doc_status_history_doc ON ocr.doc_status_history (doc_id, id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_status_history_at' AND object_id = OBJECT_ID(N'ocr.doc_status_history'))
+    CREATE INDEX ix_doc_status_history_at ON ocr.doc_status_history (changed_at);
 
 -- -----------------------------------------------------------------------------
 -- doc_error
@@ -159,10 +172,12 @@ CREATE TABLE ocr.doc_error (
     http_status   INT            NULL,
     retryable     BIT            NOT NULL,
     created_at    DATETIME2      NOT NULL CONSTRAINT df_doc_error_created DEFAULT SYSDATETIME()
-);
+) WITH (DATA_COMPRESSION = PAGE);
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_error_doc' AND object_id = OBJECT_ID(N'ocr.doc_error'))
     CREATE INDEX ix_doc_error_doc ON ocr.doc_error (doc_id, id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_error_at' AND object_id = OBJECT_ID(N'ocr.doc_error'))
+    CREATE INDEX ix_doc_error_at ON ocr.doc_error (created_at);
 
 -- -----------------------------------------------------------------------------
 -- doc_reprocess_request
@@ -188,6 +203,8 @@ CREATE TABLE ocr.doc_reprocess_request (
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_reprocess_state' AND object_id = OBJECT_ID(N'ocr.doc_reprocess_request'))
     CREATE INDEX ix_doc_reprocess_state ON ocr.doc_reprocess_request (state, id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'ix_doc_reprocess_doc' AND object_id = OBJECT_ID(N'ocr.doc_reprocess_request'))
+    CREATE INDEX ix_doc_reprocess_doc ON ocr.doc_reprocess_request (doc_id);
 
 -- -----------------------------------------------------------------------------
 -- v_doc_field_final: the value downstream systems should use (correction wins)

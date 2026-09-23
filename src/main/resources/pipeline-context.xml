@@ -28,6 +28,17 @@
         <constructor-arg ref="docTypeRegistry"/>
     </bean>
 
+    <!-- ===== Retention / housekeeping (schema ocr only) ===== -->
+    <!-- args: jdbcTemplate, transactionManager, fullJsonDays, historyDays, batchMetadataDays, batchSize -->
+    <bean id="housekeepingTasklet" class="com.visionocr.batch.HousekeepingTasklet">
+        <constructor-arg index="0" ref="jdbcTemplate"/>
+        <constructor-arg index="1" ref="transactionManager"/>
+        <constructor-arg index="2" value="${retention.full-json-days}"/>
+        <constructor-arg index="3" value="${retention.history-days}"/>
+        <constructor-arg index="4" value="${retention.batch-metadata-days}"/>
+        <constructor-arg index="5" value="${retention.delete-batch-size}"/>
+    </bean>
+
     <!-- ===== Step 0: recovery (reprocess requests + automatic retries) ===== -->
     <bean id="recoveryTasklet" class="com.visionocr.batch.RecoveryTasklet">
         <constructor-arg ref="jdbcTemplate"/>
@@ -59,9 +70,10 @@
             <bean class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
                 <property name="dataSource" ref="dataSource"/>
                 <property name="selectClause" value="SELECT *"/>
-                <property name="fromClause" value="FROM ocr.doc_job"/>
+                <!-- READPAST: skip rows locked by other partitions (they are never ours) -->
+                <property name="fromClause" value="FROM ocr.doc_job WITH (READPAST)"/>
                 <property name="whereClause"
-                          value="status = 'NEW'"/>
+                          value="status = 'NEW' AND id % #{stepExecutionContext['gridSize']} = #{stepExecutionContext['partition']}"/>
                 <property name="sortKey" value="id"/>
             </bean>
         </property>
@@ -72,9 +84,10 @@
             <bean class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
                 <property name="dataSource" ref="dataSource"/>
                 <property name="selectClause" value="SELECT *"/>
-                <property name="fromClause" value="FROM ocr.doc_job"/>
+                <!-- READPAST: skip rows locked by other partitions (they are never ours) -->
+                <property name="fromClause" value="FROM ocr.doc_job WITH (READPAST)"/>
                 <property name="whereClause"
-                          value="status = 'CLASSIFIED'"/>
+                          value="status = 'CLASSIFIED' AND id % #{stepExecutionContext['gridSize']} = #{stepExecutionContext['partition']}"/>
                 <property name="sortKey" value="id"/>
             </bean>
         </property>

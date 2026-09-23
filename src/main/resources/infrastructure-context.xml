@@ -52,6 +52,13 @@
         <property name="tablePrefix" value="ocr.BATCH_"/>
     </bean>
 
+    <!-- Threads for the classify/extract partitions -->
+    <bean id="batchTaskExecutor" class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor">
+        <property name="corePoolSize" value="${batch.threads}"/>
+        <property name="maxPoolSize" value="${batch.threads}"/>
+        <property name="threadNamePrefix" value="ocr-"/>
+    </bean>
+
     <bean id="jobLauncher" class="org.springframework.batch.core.launch.support.TaskExecutorJobLauncher">
         <property name="jobRepository" ref="jobRepository"/>
     </bean>

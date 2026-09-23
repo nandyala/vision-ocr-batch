@@ -33,12 +33,12 @@
     <!-- ===================================================================== -->
     <batch:job id="docExtractionJob" incrementer="runIdIncrementer">
 
-        <!-- Applies doc_reprocess_request rows and re-queues ERROR documents due for retry -->
-        <!-- (Re)creates one flat view per doc type: v_doc_<doctype> (columns from the doc type XML) -->
+        <!-- (Re)creates one flat view per doc type: ocr.v_doc_<doctype> (columns from the doc type XML) -->
         <batch:step id="viewStep" next="recoveryStep">
             <batch:tasklet ref="docTypeViewTasklet"/>
         </batch:step>
 
+        <!-- Applies doc_reprocess_request rows and re-queues ERROR documents due for retry -->
         <batch:step id="recoveryStep" next="ingestStep">
             <batch:tasklet ref="recoveryTasklet"/>
         </batch:step>
@@ -47,32 +47,53 @@
             <batch:tasklet ref="ingestTasklet"/>
         </batch:step>
 
-        <!-- Single-threaded: one document at a time, in id order -->
+        <!-- Azure calls run in batch.threads parallel partitions (documents split by id % threads).
+             batch.threads=1 processes one document at a time. -->
         <batch:step id="classifyStep" next="extractStep">
-            <batch:tasklet>
-                <batch:chunk reader="newDocsReader" processor="classifyProcessor"
-                             writer="classifyWriter" commit-interval="${batch.commit-interval}"/>
-            </batch:tasklet>
+            <batch:partition step="classifyWorkerStep" partitioner="modPartitioner">
+                <batch:handler grid-size="${batch.threads}" task-executor="batchTaskExecutor"/>
+            </batch:partition>
         </batch:step>
 
         <batch:step id="extractStep" next="mapValidateStep">
-            <batch:tasklet>
-                <batch:chunk reader="classifiedDocsReader" processor="extractProcessor"
-                             writer="extractWriter" commit-interval="${batch.commit-interval}"/>
-            </batch:tasklet>
+            <batch:partition step="extractWorkerStep" partitioner="modPartitioner">
+                <batch:handler grid-size="${batch.threads}" task-executor="batchTaskExecutor"/>
+            </batch:partition>
         </batch:step>
 
-        <batch:step id="mapValidateStep" next="summaryStep">
+        <batch:step id="mapValidateStep" next="housekeepingStep">
             <batch:tasklet>
                 <batch:chunk reader="extractedDocsReader" processor="mapValidateProcessor"
                              writer="mappedDocumentWriter" commit-interval="${batch.commit-interval}"/>
             </batch:tasklet>
         </batch:step>
 
+        <!-- Retention: old full Azure JSON, history/error rows and Spring Batch run records (schema ocr only) -->
+        <batch:step id="housekeepingStep" next="summaryStep">
+            <batch:tasklet ref="housekeepingTasklet"/>
+        </batch:step>
+
         <batch:step id="summaryStep">
             <batch:tasklet ref="jobSummaryTasklet"/>
         </batch:step>
     </batch:job>
+
+    <!-- Worker steps: one instance per partition -->
+    <batch:step id="classifyWorkerStep">
+        <batch:tasklet>
+            <batch:chunk reader="newDocsReader" processor="classifyProcessor"
+                         writer="classifyWriter" commit-interval="${batch.commit-interval}"/>
+        </batch:tasklet>
+    </batch:step>
+
+    <batch:step id="extractWorkerStep">
+        <batch:tasklet>
+            <batch:chunk reader="classifiedDocsReader" processor="extractProcessor"
+                         writer="extractWriter" commit-interval="${batch.commit-interval}"/>
+        </batch:tasklet>
+    </batch:step>
+
+    <bean id="modPartitioner" class="com.visionocr.batch.ModPartitioner"/>
 
     <bean id="runIdIncrementer" class="org.springframework.batch.core.launch.support.RunIdIncrementer"/>
 </beans>

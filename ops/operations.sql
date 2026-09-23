@@ -32,6 +32,11 @@ FROM ocr.doc_job WHERE status = 'REVIEW' ORDER BY updated_at;
 SELECT changed_at, stage, from_status, to_status, changed_by, note
 FROM ocr.doc_status_history WHERE doc_id = @doc_id ORDER BY id;
 
+-- Full Azure response of one document (stored GZIP-compressed; result_json holds rows from older versions)
+SELECT id, operation, model_id, created_at,
+       COALESCE(CAST(DECOMPRESS(result_json_gz) AS NVARCHAR(MAX)), result_json) AS azure_json
+FROM ocr.doc_azure_result WHERE doc_id = @doc_id AND is_current = 1;
+
 -- All Azure calls for one document (model versions, timings)
 SELECT id, operation, model_id, doc_confidence, duration_ms, is_current, created_at
 FROM ocr.doc_azure_result WHERE doc_id = @doc_id ORDER BY id;
@@ -105,7 +110,30 @@ FROM ocr.doc_field_correction c JOIN ocr.doc_job j ON j.id = c.doc_id
 WHERE c.active = 1 GROUP BY j.doc_type, c.field_name, c.reason ORDER BY corrections DESC;
 
 -- ---------------------------------------------------------------- housekeeping
+-- The job's housekeepingStep applies the retention.* settings automatically on every run
+-- (old full Azure JSON, history/error rows, Spring Batch run records). Manual equivalents below.
 
--- Drop the full Azure JSON of old, superseded results (keep fields_json for re-mapping)
-UPDATE ocr.doc_azure_result SET result_json = NULL
-WHERE is_current = 0 AND created_at < DATEADD(DAY, -90, SYSDATETIME());
+-- Row counts and sizes of the job's tables
+SELECT t.name AS table_name, SUM(p.rows) AS row_count,
+       CAST(SUM(a.total_pages) * 8 / 1024.0 AS DECIMAL(12,1)) AS size_mb
+FROM sys.tables t
+JOIN sys.schemas s ON s.schema_id = t.schema_id
+JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
+JOIN sys.allocation_units a ON a.container_id = p.partition_id
+WHERE s.name = 'ocr'
+GROUP BY t.name ORDER BY size_mb DESC;
+
+-- One-time (DBA, off-hours): PAGE-compress tables created by an earlier version of the script.
+-- New installations get this automatically.
+ALTER TABLE ocr.doc_field          REBUILD WITH (DATA_COMPRESSION = PAGE);
+ALTER TABLE ocr.doc_status_history REBUILD WITH (DATA_COMPRESSION = PAGE);
+ALTER TABLE ocr.doc_error          REBUILD WITH (DATA_COMPRESSION = PAGE);
+ALTER TABLE ocr.doc_azure_result   REBUILD WITH (DATA_COMPRESSION = PAGE);
+
+-- Optional: fast search on a JSON key you query often (repeat per key)
+-- ALTER TABLE ocr.doc_job ADD lender_account AS CAST(JSON_VALUE(extracted_json, '$.lenderAccountNumber') AS NVARCHAR(100));
+-- CREATE INDEX ix_doc_job_lender_account ON ocr.doc_job (lender_account);
+
+-- Clear the full Azure JSON of old results by hand (keep fields_json for re-mapping)
+UPDATE TOP (5000) ocr.doc_azure_result SET result_json_gz = NULL, result_json = NULL
+WHERE created_at < DATEADD(DAY, -180, SYSDATETIME()) AND (result_json_gz IS NOT NULL OR result_json IS NOT NULL);

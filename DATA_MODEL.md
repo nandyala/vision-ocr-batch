@@ -28,7 +28,7 @@ Operator queries: `ops/operations.sql`.
 | Table | Purpose | Written by |
 |---|---|---|
 | `doc_job` | Current status of each document (the queue each step reads from) + `extracted_json`: all field values as one JSON object | every step |
-| `doc_azure_result` | Every successful Azure call: full AnalyzeResult JSON (`result_json`) and simplified fields (`fields_json`). Rows are never overwritten; `is_current` marks the latest per operation | classify, extract |
+| `doc_azure_result` | Every successful Azure call: full AnalyzeResult JSON (`result_json_gz`, GZIP-compressed with SQL Server `COMPRESS`, cleared after `retention.full-json-days`) and simplified fields (`fields_json`, kept). Rows are never overwritten; `is_current` marks the latest per operation | classify, extract |
 | `doc_field` | One row per extracted field (generic for every doc type): all fields the model returned, cleaned/validated where the doc type XML has rules (`configured`). `result_id` points to the Azure result | map |
 | `doc_field_correction` | Reviewer corrections. Keyed by field name, so they survive reprocessing. Also a source of training data | review UI / SQL |
 | `doc_status_history` | Append-only audit of every status change (who, when, why) | all steps, recovery |
@@ -99,3 +99,17 @@ Corrections in `doc_field_correction` are kept on reprocessing. The human value 
 All writes for a chunk (status update, Azure JSON, error, history, fields) go through
 `DocumentRepository` inside the chunk transaction, so they commit or roll back together. If the job
 crashes mid-chunk, those documents keep their previous status and are processed again on the next run.
+
+## Volume and retention
+
+* **Parallelism:** classify/extract run `batch.threads` partitions (`id % threads`); readers use `READPAST`
+  so partitions never wait on each other's rows.
+* **Compression:** the full Azure response is stored with `COMPRESS()` (typically 5-10x smaller); the large
+  tables (`doc_field`, `doc_status_history`, `doc_error`, `doc_azure_result`) use PAGE compression.
+* **Batched writes:** all fields of a chunk are inserted with one batched statement.
+* **Retention (housekeepingStep, every run):** full Azure JSON after `retention.full-json-days`, history and
+  error rows after `retention.history-days`, finished Spring Batch runs after `retention.batch-metadata-days`.
+  Deletes run in batches of `retention.delete-batch-size`, each in its own transaction. Business data
+  (`doc_job`, `doc_field`, corrections) is never deleted by the job.
+* **Indexes** cover the queue (status), retries, doc type/date, value lookups, every foreign key and the
+  retention date columns.
