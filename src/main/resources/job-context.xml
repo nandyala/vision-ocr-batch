@@ -34,6 +34,11 @@
     <batch:job id="docExtractionJob" incrementer="runIdIncrementer">
 
         <!-- Applies doc_reprocess_request rows and re-queues ERROR documents due for retry -->
+        <!-- (Re)creates one flat view per doc type: v_doc_<doctype> (columns from the doc type XML) -->
+        <batch:step id="viewStep" next="recoveryStep">
+            <batch:tasklet ref="docTypeViewTasklet"/>
+        </batch:step>
+
         <batch:step id="recoveryStep" next="ingestStep">
             <batch:tasklet ref="recoveryTasklet"/>
         </batch:step>

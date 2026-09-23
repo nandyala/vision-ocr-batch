@@ -33,6 +33,7 @@ Operator queries: `ops/operations.sql`.
 | `doc_error` | Every failure: stage, attempt number, exception, HTTP status, retryable | writers, ingest |
 | `doc_reprocess_request` | Operator requests to push documents back into the pipeline | operators |
 | `v_doc_field_final` | What downstream systems read | view |
+| `v_doc_<doctype>` | Generated per doc type at each run (e.g. `v_doc_auto_pay_auth`): one row per document, one column per field listed in the doc type XML (`viewColumns` or `fields`) | viewStep |
 
 ## Status lifecycle
 

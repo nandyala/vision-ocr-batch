@@ -22,6 +22,12 @@
         <constructor-arg index="2" value="${results.store-full-json}"/>
     </bean>
 
+    <!-- ===== Generated per-doc-type views (v_doc_<doctype>) ===== -->
+    <bean id="docTypeViewTasklet" class="com.visionocr.batch.DocTypeViewTasklet">
+        <constructor-arg ref="jdbcTemplate"/>
+        <constructor-arg ref="docTypeRegistry"/>
+    </bean>
+
     <!-- ===== Step 0: recovery (reprocess requests + automatic retries) ===== -->
     <bean id="recoveryTasklet" class="com.visionocr.batch.RecoveryTasklet">
         <constructor-arg ref="jdbcTemplate"/>

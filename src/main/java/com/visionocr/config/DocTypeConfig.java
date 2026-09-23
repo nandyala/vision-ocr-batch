@@ -29,6 +29,8 @@ public class DocTypeConfig {
     private boolean includeUnmappedFields = true;
     /** Minimum confidence for fields without rules (0 = no check). */
     private double defaultMinConfidence = 0.0;
+    /** Columns of the generated view v_doc_<doctype>. Empty = the fields listed in {@link #fields}. */
+    private List<String> viewColumns = new ArrayList<>();
 
     public String getDocType() { return docType; }
     public void setDocType(String docType) { this.docType = docType; }
@@ -50,6 +52,8 @@ public class DocTypeConfig {
     public void setIncludeUnmappedFields(boolean includeUnmappedFields) { this.includeUnmappedFields = includeUnmappedFields; }
     public double getDefaultMinConfidence() { return defaultMinConfidence; }
     public void setDefaultMinConfidence(double defaultMinConfidence) { this.defaultMinConfidence = defaultMinConfidence; }
+    public List<String> getViewColumns() { return viewColumns; }
+    public void setViewColumns(List<String> viewColumns) { this.viewColumns = viewColumns; }
     public List<CrossFieldRule> getCrossFieldRules() { return crossFieldRules; }
     public void setCrossFieldRules(List<CrossFieldRule> crossFieldRules) { this.crossFieldRules = crossFieldRules; }
 }

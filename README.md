@@ -172,6 +172,15 @@ All extracted values of every document as one JSON object (works for any doc typ
 SELECT id, file_name, doc_type, status, extracted_json FROM doc_job ORDER BY id;
 ```
 
+One row per document with the fields as columns: the job generates a view per doc type at the start
+of every run, named `v_doc_<doctype>` (e.g. `v_doc_auto_pay_auth`). Its columns come from the doc type
+XML (`viewColumns`, or else the listed `fields`), so a new doc type or field needs no SQL. Values include
+reviewer corrections:
+
+```sql
+SELECT * FROM v_doc_auto_pay_auth ORDER BY doc_id;
+```
+
 All fields of all documents as rows, with reviewer corrections applied (generic for every doc type):
 
 ```sql

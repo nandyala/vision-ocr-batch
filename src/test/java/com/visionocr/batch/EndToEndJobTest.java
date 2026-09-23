@@ -149,6 +149,11 @@ class EndToEndJobTest {
         assertTrue(extracted.contains("\"routingNumber\":\"011000015\""), extracted);
         assertTrue(extracted.contains("\"ReferenceCode\":\"REF-2024-001\""), extracted);
 
+        // Generated per-doc-type view: one row per document, one column per configured field
+        Map<String, Object> flat = jdbc.queryForMap("SELECT * FROM v_doc_auto_pay_auth WHERE file_name = 'typed-good.pdf'");
+        assertEquals("011000015", flat.get("routingNumber"));
+        assertEquals("JANE DOE", flat.get("customerName"));
+
         // Azure JSON stored per call as plain JSON
         String fieldsJson = jdbc.queryForObject("SELECT r.fields_json FROM doc_azure_result r JOIN doc_job j ON j.id = r.doc_id "
                 + "WHERE j.file_name = 'typed-good.pdf' AND r.operation = 'EXTRACT' AND r.is_current = TRUE", String.class);

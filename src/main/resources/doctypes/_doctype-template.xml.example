@@ -30,6 +30,16 @@
         <!-- Send to REVIEW when any field without rules is below this confidence (0 = off) -->
         <property name="defaultMinConfidence" value="0.0"/>
 
+        <!-- OPTIONAL: columns of the generated view v_doc_dispute (default: the fields listed below).
+             Use this to add fields that have no rules, e.g. ones the model returns as-is. -->
+        <property name="viewColumns">
+            <list>
+                <value>accountNumber</value>
+                <value>DisputeDate</value>
+                <value>DisputedAmount</value>
+            </list>
+        </property>
+
         <!-- OPTIONAL: rules for specific fields -->
         <property name="fields">
             <list>
