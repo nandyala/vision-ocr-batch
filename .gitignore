@@ -1,0 +1,8 @@
+target/
+data/
+*.iml
+.idea/
+application-local.properties
+dependency-reduced-pom.xml
+.DS_Store
+_to_delete/

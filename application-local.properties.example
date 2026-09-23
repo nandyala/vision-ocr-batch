@@ -1,0 +1,28 @@
+# Copy this file to  application-local.properties  (same folder = project root) and fill in.
+# application-local.properties is in .gitignore - it never goes to git.
+# Values here override src/main/resources/application.properties.
+
+azure.endpoint=https://<your-resource>.cognitiveservices.azure.com/
+azure.api-key=<KEY 1 from portal: Document Intelligence > Keys and Endpoint>
+# Name of your trained classifier in Document Intelligence Studio.
+# Leave EMPTY if you have no classifier: every document is then treated as classify.default-doc-type.
+azure.classifier-id=
+classify.default-doc-type=AUTO_PAY_AUTH
+doctype.auto-pay-auth.model-id=autopay-neural-v2
+
+# Corporate proxy (needed if the job logs "connection timed out" but PowerShell works).
+# Find it with PowerShell: [System.Net.WebRequest]::DefaultWebProxy.GetProxy("https://<your-resource>.cognitiveservices.azure.com")
+azure.proxy.host=
+azure.proxy.port=
+# only if the proxy requires a login:
+azure.proxy.username=
+azure.proxy.password=
+
+# Folder the job scans for PDF/TIFF files (Windows paths: use forward slashes or double backslashes)
+input.dir=./data/input
+#input.dir=C:/scans/incoming
+
+# base64 of 32 random bytes. PowerShell to generate one:
+#   $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
+# Keep it safe: without it encrypted values in the DB cannot be read.
+security.field-encryption-key=

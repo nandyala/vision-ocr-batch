@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ENTRY POINT.  Run with:
+    java -jar vision-ocr-batch.jar job-context.xml docExtractionJob -next
+  Pure XML configuration - no component scanning, no annotations.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:batch="http://www.springframework.org/schema/batch"
+       xsi:schemaLocation="
+         http://www.springframework.org/schema/beans   https://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd
+         http://www.springframework.org/schema/batch   https://www.springframework.org/schema/batch/spring-batch.xsd">
+
+    <!-- Later locations override earlier ones; system properties and env vars override both. -->
+    <context:property-placeholder
+            location="classpath:application.properties,file:${config.file:./application.properties}"
+            ignore-resource-not-found="true"/>
+
+    <import resource="classpath:infrastructure-context.xml"/>
+    <import resource="classpath:pipeline-context.xml"/>
+    <import resource="classpath:azure-context.xml"/>
+    <!-- Every doc type lives in its own file. Add a file here to add a doc type. -->
+    <import resource="classpath*:doctypes/*.xml"/>
+
+    <!-- ===================================================================== -->
+    <!--  JOB                                                                   -->
+    <!--  recover -> ingest -> classify -> extract                          -->
+    <!--          -> map/validate -> summary                                     -->
+    <!--  Each step picks documents by status, so a failed/stopped run can be    -->
+    <!--  simply re-launched and continues where it left off.                   -->
+    <!-- ===================================================================== -->
+    <batch:job id="docExtractionJob" incrementer="runIdIncrementer">
+
+        <!-- Applies doc_reprocess_request rows and re-queues ERROR documents due for retry -->
+        <batch:step id="recoveryStep" next="ingestStep">
+            <batch:tasklet ref="recoveryTasklet"/>
+        </batch:step>
+
+        <batch:step id="ingestStep" next="classifyStep">
+            <batch:tasklet ref="ingestTasklet"/>
+        </batch:step>
+
+        <!-- Single-threaded: one document at a time, in id order -->
+        <batch:step id="classifyStep" next="extractStep">
+            <batch:tasklet>
+                <batch:chunk reader="newDocsReader" processor="classifyProcessor"
+                             writer="classifyWriter" commit-interval="${batch.commit-interval}"/>
+            </batch:tasklet>
+        </batch:step>
+
+        <batch:step id="extractStep" next="mapValidateStep">
+            <batch:tasklet>
+                <batch:chunk reader="classifiedDocsReader" processor="extractProcessor"
+                             writer="extractWriter" commit-interval="${batch.commit-interval}"/>
+            </batch:tasklet>
+        </batch:step>
+
+        <batch:step id="mapValidateStep" next="summaryStep">
+            <batch:tasklet>
+                <batch:chunk reader="extractedDocsReader" processor="mapValidateProcessor"
+                             writer="mappedDocumentWriter" commit-interval="${batch.commit-interval}"/>
+            </batch:tasklet>
+        </batch:step>
+
+        <batch:step id="summaryStep">
+            <batch:tasklet ref="jobSummaryTasklet"/>
+        </batch:step>
+    </batch:job>
+
+    <bean id="runIdIncrementer" class="org.springframework.batch.core.launch.support.RunIdIncrementer"/>
+</beans>

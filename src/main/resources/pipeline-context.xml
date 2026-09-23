@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generic pipeline components (doc-type agnostic) + shared normalizers/validators for doc type files. -->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!-- ===== Doc type registry: collects every DocTypeConfig bean (see doctypes/*.xml) ===== -->
+    <bean id="docTypeRegistry" class="com.visionocr.config.DocTypeRegistry" autowire="constructor"/>
+
+    <!-- ===== Security ===== -->
+    <bean id="fieldEncryptor" class="com.visionocr.security.AesGcmFieldEncryptor">
+        <constructor-arg value="${security.field-encryption-key}"/>
+    </bean>
+
+    <!-- ===== Retry + persistence ===== -->
+    <!-- args: maxAttempts, baseDelayMinutes, maxDelayMinutes -->
+    <bean id="retryPolicy" class="com.visionocr.batch.RetryPolicy">
+        <constructor-arg index="0" value="${retry.max-attempts}"/>
+        <constructor-arg index="1" value="${retry.base-delay-minutes}"/>
+        <constructor-arg index="2" value="${retry.max-delay-minutes}"/>
+    </bean>
+
+    <!-- args: jdbcTemplate, encryptor, retryPolicy, storeFullJson -->
+    <bean id="documentRepository" class="com.visionocr.repository.DocumentRepository">
+        <constructor-arg index="0" ref="jdbcTemplate"/>
+        <constructor-arg index="1" ref="fieldEncryptor"/>
+        <constructor-arg index="2" ref="retryPolicy"/>
+        <constructor-arg index="3" value="${results.store-full-json}"/>
+    </bean>
+
+    <!-- ===== Step 0: recovery (reprocess requests + automatic retries) ===== -->
+    <bean id="recoveryTasklet" class="com.visionocr.batch.RecoveryTasklet">
+        <constructor-arg ref="jdbcTemplate"/>
+    </bean>
+
+    <!-- ===== Step 1: ingest ===== -->
+    <bean id="ingestTasklet" class="com.visionocr.batch.IngestTasklet">
+        <constructor-arg ref="jdbcTemplate"/>
+        <constructor-arg ref="docTypeRegistry"/>
+        <constructor-arg value="${input.dir}"/>
+        <constructor-arg value="${input.extensions}"/>
+        <constructor-arg value="${input.max-file-mb}"/>
+    </bean>
+
+    <!-- ===== Readers: one per status ===== -->
+    <bean id="documentRecordRowMapper" class="com.visionocr.batch.DocumentRecordRowMapper"/>
+
+    <bean id="abstractDocReader" abstract="true"
+          class="org.springframework.batch.item.database.JdbcPagingItemReader">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="pageSize" value="${batch.page-size}"/>
+        <property name="rowMapper" ref="documentRecordRowMapper"/>
+        <!-- Status-driven processing makes restart state unnecessary. -->
+        <property name="saveState" value="false"/>
+    </bean>
+
+    <bean id="newDocsReader" parent="abstractDocReader" scope="step">
+        <property name="queryProvider">
+            <bean class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
+                <property name="dataSource" ref="dataSource"/>
+                <property name="selectClause" value="SELECT *"/>
+                <property name="fromClause" value="FROM doc_job"/>
+                <property name="whereClause"
+                          value="status = 'NEW'"/>
+                <property name="sortKey" value="id"/>
+            </bean>
+        </property>
+    </bean>
+
+    <bean id="classifiedDocsReader" parent="abstractDocReader" scope="step">
+        <property name="queryProvider">
+            <bean class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
+                <property name="dataSource" ref="dataSource"/>
+                <property name="selectClause" value="SELECT *"/>
+                <property name="fromClause" value="FROM doc_job"/>
+                <property name="whereClause"
+                          value="status = 'CLASSIFIED'"/>
+                <property name="sortKey" value="id"/>
+            </bean>
+        </property>
+    </bean>
+
+    <bean id="extractedDocsReader" parent="abstractDocReader" scope="step">
+        <property name="queryProvider">
+            <bean class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
+                <property name="dataSource" ref="dataSource"/>
+                <property name="selectClause" value="SELECT *"/>
+                <property name="fromClause" value="FROM doc_job"/>
+                <property name="whereClause" value="status = 'EXTRACTED'"/>
+                <property name="sortKey" value="id"/>
+            </bean>
+        </property>
+    </bean>
+
+    <!-- ===== Processors ===== -->
+    <!-- args: client, registry, default doc type used when no classifier is configured -->
+    <bean id="classifyProcessor" class="com.visionocr.batch.ClassifyProcessor">
+        <constructor-arg index="0" ref="docIntelClient"/>
+        <constructor-arg index="1" ref="docTypeRegistry"/>
+        <constructor-arg index="2" value="${classify.default-doc-type}"/>
+    </bean>
+
+    <bean id="extractProcessor" class="com.visionocr.batch.ExtractProcessor">
+        <constructor-arg ref="docIntelClient"/>
+        <constructor-arg ref="docTypeRegistry"/>
+    </bean>
+
+    <bean id="fieldMappingService" class="com.visionocr.mapping.FieldMappingService"/>
+
+    <bean id="mapValidateProcessor" class="com.visionocr.batch.MapValidateProcessor">
+        <constructor-arg ref="docTypeRegistry"/>
+        <constructor-arg ref="fieldMappingService"/>
+        <constructor-arg ref="documentRepository"/>
+    </bean>
+
+    <!-- ===== Writers ===== -->
+    <bean id="classifyWriter" class="com.visionocr.batch.DocumentStatusWriter">
+        <constructor-arg index="0" ref="documentRepository"/>
+        <constructor-arg index="1" value="CLASSIFY"/>
+    </bean>
+
+    <bean id="extractWriter" class="com.visionocr.batch.DocumentStatusWriter">
+        <constructor-arg index="0" ref="documentRepository"/>
+        <constructor-arg index="1" value="EXTRACT"/>
+    </bean>
+
+    <bean id="mappedDocumentWriter" class="com.visionocr.batch.MappedDocumentWriter">
+        <constructor-arg ref="documentRepository"/>
+    </bean>
+
+    <bean id="jobSummaryTasklet" class="com.visionocr.batch.JobSummaryTasklet">
+        <constructor-arg ref="jdbcTemplate"/>
+    </bean>
+
+    <!-- ===================================================================== -->
+    <!--  Shared building blocks for doctypes/*.xml (reference them by id)      -->
+    <!-- ===================================================================== -->
+    <bean id="norm.whitespace" class="com.visionocr.mapping.WhitespaceNormalizer"/>
+    <bean id="norm.upper" class="com.visionocr.mapping.CaseNormalizer">
+        <constructor-arg value="UPPER"/>
+    </bean>
+    <bean id="norm.lower" class="com.visionocr.mapping.CaseNormalizer">
+        <constructor-arg value="LOWER"/>
+    </bean>
+    <bean id="norm.digits" class="com.visionocr.mapping.DigitsOnlyNormalizer"/>
+    <bean id="norm.date" class="com.visionocr.mapping.DateNormalizer"/>
+    <bean id="norm.amount" class="com.visionocr.mapping.AmountNormalizer"/>
+
+    <bean id="val.abaRouting" class="com.visionocr.validation.AbaRoutingNumberValidator"/>
+    <bean id="val.isoDate" class="com.visionocr.validation.RegexValidator">
+        <constructor-arg value="\d{4}-\d{2}-\d{2}"/>
+        <constructor-arg value="NOT_A_DATE"/>
+    </bean>
+    <bean id="val.signed" class="com.visionocr.validation.AllowedValuesValidator">
+        <constructor-arg>
+            <list><value>signed</value></list>
+        </constructor-arg>
+        <constructor-arg value="NOT_SIGNED"/>
+    </bean>
+</beans>

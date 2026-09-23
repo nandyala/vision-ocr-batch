@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DOC TYPE: AUTO_PAY_AUTH - Automatic Payment (ACH debit) Authorization Agreement
+  e.g. "-Automatic Payment Authorization Agreement" and other lenders' variants.
+
+  Azure side:
+    * classifier class name(s)  -> classifierLabels
+    * custom extraction model   -> modelId  (neural model trained on all layout variants)
+    * field names in the model  -> azureField (must match the labels used in Document Intelligence Studio)
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <bean id="docType.AUTO_PAY_AUTH" class="com.visionocr.config.DocTypeConfig">
+        <property name="docType" value="AUTO_PAY_AUTH"/>
+        <property name="description" value="Automatic payment (ACH) authorization agreement"/>
+        <property name="enabled" value="true"/>
+        <property name="classifierLabels">
+            <list>
+                <value>auto_pay_auth</value>
+            </list>
+        </property>
+        <property name="modelId" value="${doctype.auto-pay-auth.model-id}"/>
+        <property name="minClassifyConfidence" value="0.80"/>
+        <property name="minDocumentConfidence" value="0.60"/>
+
+        <property name="fields">
+            <list>
+                <bean class="com.visionocr.config.FieldMapping">
+                    <property name="azureField" value="CustomerName"/>
+                    <property name="canonicalField" value="customerName"/>
+                    <property name="required" value="true"/>
+                    <property name="minConfidence" value="0.80"/>
+                    <property name="normalizers">
+                        <list><ref bean="norm.whitespace"/><ref bean="norm.upper"/></list>
+                    </property>
+                </bean>
+
+                <bean class="com.visionocr.config.FieldMapping">
+                    <property name="azureField" value="LenderAccountNumber"/>
+                    <property name="canonicalField" value="lenderAccountNumber"/>
+                    <property name="required" value="true"/>
+                    <property name="minConfidence" value="0.85"/>
+                    <property name="normalizers">
+                        <list><ref bean="norm.whitespace"/><ref bean="apa.stripSpaces"/></list>
+                    </property>
+                    <property name="validators">
+                        <list><ref bean="apa.lenderAccountFormat"/></list>
+                    </property>
+                </bean>
+
+                <bean class="com.visionocr.config.FieldMapping">
+                    <property name="azureField" value="BuyerAddress"/>
+                    <property name="canonicalField" value="buyerAddress"/>
+                    <property name="required" value="false"/>
+                    <property name="minConfidence" value="0.70"/>
+                    <property name="normalizers">
+                        <list><ref bean="norm.whitespace"/><ref bean="norm.upper"/></list>
+                    </property>
+                </bean>
+
+                <bean class="com.visionocr.config.FieldMapping">
+                    <property name="azureField" value="BankAccountHolderName"/>
+                    <property name="canonicalField" value="bankAccountHolderName"/>
+                    <property name="required" value="true"/>
+                    <property name="minConfidence" value="0.80"/>
+                    <property name="normalizers">
+                        <list><ref bean="norm.whitespace"/><ref bean="norm.upper"/></list>
+                    </property>
+                </bean>
+
+                <bean class="com.visionocr.config.FieldMapping">
+                    <property name="azureField" value="BankName"/>
+                    <property name="canonicalField" value="bankName"/>
+                    <property name="required" value="true"/>
+                    <property name="minConfidence" value="0.75"/>
+                    <property name="normalizers">
+                        <list><ref bean="norm.whitespace"/><ref bean="norm.upper"/></list>
+                    </property>
+                </bean>
+
+                <bean class="com.visionocr.config.FieldMapping">
+                    <property name="azureField" value="RoutingNumber"/>
+                    <property name="canonicalField" value="routingNumber"/>
+                    <property name="required" value="true"/>
+                    <property name="sensitive" value="true"/>
+                    <property name="minConfidence" value="0.90"/>
+                    <property name="normalizers">
+                        <list><ref bean="norm.digits"/></list>
+                    </property>
+                    <property name="validators">
+                        <list><ref bean="val.abaRouting"/></list>
+                    </property>
+                </bean>
+
+                <bean class="com.visionocr.config.FieldMapping">
+                    <property name="azureField" value="CheckingAccountNumber"/>
+                    <property name="canonicalField" value="checkingAccountNumber"/>
+                    <property name="required" value="true"/>
+                    <property name="sensitive" value="true"/>
+                    <property name="minConfidence" value="0.90"/>
+                    <property name="normalizers">
+                        <list><ref bean="norm.digits"/></list>
+                    </property>
+                    <property name="validators">
+                        <list><ref bean="apa.accountNumberFormat"/></list>
+                    </property>
+                </bean>
+
+                <bean class="com.visionocr.config.FieldMapping">
+                    <property name="azureField" value="Signature"/>
+                    <property name="canonicalField" value="signature"/>
+                    <property name="required" value="true"/>
+                    <property name="minConfidence" value="0.70"/>
+                    <property name="normalizers">
+                        <list><ref bean="norm.whitespace"/><ref bean="norm.lower"/></list>
+                    </property>
+                    <property name="validators">
+                        <list><ref bean="val.signed"/></list>
+                    </property>
+                </bean>
+            </list>
+        </property>
+
+        <property name="crossFieldRules">
+            <list>
+                <!-- Joint accounts / third-party payers legitimately differ -> review, not reject -->
+                <bean class="com.visionocr.validation.FuzzyMatchRule">
+                    <constructor-arg value="customerName"/>
+                    <constructor-arg value="bankAccountHolderName"/>
+                    <constructor-arg value="0.80"/>
+                    <constructor-arg value="ACCOUNT_HOLDER_NAME_MISMATCH"/>
+                </bean>
+                <!-- No-op unless reference.routing-directory-csv is configured -->
+                <bean class="com.visionocr.validation.RoutingBankMatchRule">
+                    <constructor-arg value="routingNumber"/>
+                    <constructor-arg value="bankName"/>
+                    <constructor-arg value="0.60"/>
+                    <constructor-arg value="${reference.routing-directory-csv}"/>
+                </bean>
+            </list>
+        </property>
+    </bean>
+
+    <!-- Doc-type specific helpers (prefix with the doc type to avoid id clashes) -->
+    <bean id="apa.stripSpaces" class="com.visionocr.mapping.RegexReplaceNormalizer">
+        <constructor-arg value="\s+"/>
+        <constructor-arg value=""/>
+    </bean>
+    <!-- Adjust to the real lender account number format -->
+    <bean id="apa.lenderAccountFormat" class="com.visionocr.validation.RegexValidator">
+        <constructor-arg value="[A-Za-z0-9\-]{6,20}"/>
+        <constructor-arg value="BAD_LENDER_ACCOUNT_FORMAT"/>
+    </bean>
+    <bean id="apa.accountNumberFormat" class="com.visionocr.validation.RegexValidator">
+        <constructor-arg value="\d{4,17}"/>
+        <constructor-arg value="ACCOUNT_NOT_4_TO_17_DIGITS"/>
+    </bean>
+</beans>

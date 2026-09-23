@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <!-- Runs the batch job against real Azure. Azure values come from application-local.properties
+       in the project root (not committed to git). -->
+  <configuration default="false" name="OCR Job - Azure" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="org.springframework.batch.core.launch.support.CommandLineJobRunner" />
+    <module name="vision-ocr-batch" />
+    <option name="PROGRAM_PARAMETERS" value="job-context.xml docExtractionJob -next" />
+    <option name="VM_PARAMETERS" value="-Dconfig.file=application-local.properties -Dfile.encoding=UTF-8" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

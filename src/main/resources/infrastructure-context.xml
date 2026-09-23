@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- DataSource, transactions, Spring Batch job repository/launcher, schema init. -->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+       xsi:schemaLocation="
+         http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/jdbc  https://www.springframework.org/schema/jdbc/spring-jdbc.xsd">
+
+    <bean id="dataSource" class="com.zaxxer.hikari.HikariDataSource" destroy-method="close">
+        <property name="jdbcUrl" value="${db.url}"/>
+        <property name="driverClassName" value="${db.driver}"/>
+        <property name="username" value="${db.user}"/>
+        <property name="password" value="${db.password}"/>
+        <property name="maximumPoolSize" value="${db.pool-size}"/>
+    </bean>
+
+    <bean id="transactionManager" class="org.springframework.jdbc.support.JdbcTransactionManager">
+        <property name="dataSource" ref="dataSource"/>
+    </bean>
+
+    <bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+        <property name="dataSource" ref="dataSource"/>
+    </bean>
+
+    <!-- Spring Batch metadata tables: scripts are not idempotent, so failures (table exists) are ignored. -->
+    <jdbc:initialize-database data-source="dataSource" enabled="${db.init}" ignore-failures="ALL">
+        <jdbc:script location="classpath:org/springframework/batch/core/schema-${db.platform}.sql"/>
+    </jdbc:initialize-database>
+    <!-- Application tables: idempotent script, real failures are reported. -->
+    <jdbc:initialize-database data-source="dataSource" enabled="${db.init}">
+        <jdbc:script location="classpath:schema-app.sql"/>
+    </jdbc:initialize-database>
+
+    <bean id="jobRepository" class="org.springframework.batch.core.repository.support.JobRepositoryFactoryBean">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="transactionManager" ref="transactionManager"/>
+    </bean>
+
+    <bean id="jobExplorer" class="org.springframework.batch.core.explore.support.JobExplorerFactoryBean">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="transactionManager" ref="transactionManager"/>
+    </bean>
+
+    <bean id="jobLauncher" class="org.springframework.batch.core.launch.support.TaskExecutorJobLauncher">
+        <property name="jobRepository" ref="jobRepository"/>
+    </bean>
+
+</beans>

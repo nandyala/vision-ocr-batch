@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Azure Document Intelligence client. Tests replace this bean with an offline stub
+     (see src/test/resources/test-stub-context.xml). -->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!-- args: endpoint, apiKey, classifierId, maxRetries, pollIntervalSeconds, timeoutSeconds,
+               proxyHost, proxyPort, proxyUser, proxyPassword -->
+    <bean id="docIntelClient" class="com.visionocr.azure.AzureDocIntelClient">
+        <constructor-arg index="0" value="${azure.endpoint}"/>
+        <constructor-arg index="1" value="${azure.api-key}"/>
+        <constructor-arg index="2" value="${azure.classifier-id}"/>
+        <constructor-arg index="3" value="${azure.max-retries}"/>
+        <constructor-arg index="4" value="${azure.poll-interval-seconds}"/>
+        <constructor-arg index="5" value="${azure.timeout-seconds}"/>
+        <constructor-arg index="6" value="${azure.proxy.host}"/>
+        <constructor-arg index="7" value="${azure.proxy.port}"/>
+        <constructor-arg index="8" value="${azure.proxy.username}"/>
+        <constructor-arg index="9" value="${azure.proxy.password}"/>
+    </bean>
+</beans>
