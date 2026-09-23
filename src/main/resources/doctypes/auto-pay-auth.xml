@@ -109,12 +109,15 @@
                 </bean>
 
                 <bean class="com.visionocr.config.FieldMapping">
+                    <!-- Only checks whether the box is signed. The model labels it as a string, so the value is the
+                         OCR text of the signature; norm.signature turns it into "signed" / "unsigned".
+                         No confidence check: OCR confidence of handwriting says nothing about presence. -->
                     <property name="azureField" value="Signature"/>
                     <property name="canonicalField" value="signature"/>
                     <property name="required" value="true"/>
-                    <property name="minConfidence" value="0.70"/>
+                    <property name="minConfidence" value="0"/>
                     <property name="normalizers">
-                        <list><ref bean="norm.whitespace"/><ref bean="norm.lower"/></list>
+                        <list><ref bean="norm.signature"/></list>
                     </property>
                     <property name="validators">
                         <list><ref bean="val.signed"/></list>

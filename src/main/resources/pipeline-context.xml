@@ -156,6 +156,8 @@
         <constructor-arg value="LOWER"/>
     </bean>
     <bean id="norm.digits" class="com.visionocr.mapping.DigitsOnlyNormalizer"/>
+    <!-- signature present? -> "signed" / "unsigned" (works for string or signature typed model fields) -->
+    <bean id="norm.signature" class="com.visionocr.mapping.SignatureNormalizer"/>
     <bean id="norm.date" class="com.visionocr.mapping.DateNormalizer"/>
     <bean id="norm.amount" class="com.visionocr.mapping.AmountNormalizer"/>
 
