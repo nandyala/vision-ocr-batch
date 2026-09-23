@@ -72,6 +72,7 @@ src/main/java/com/visionocr/
   validation/  field validators + cross-field rules (ABA checksum, fuzzy name match...)
 scripts/azure-train.sh        train model/classifier via REST
 ops/operations.sql            monitoring, reprocess, correction and housekeeping queries
+ops/reset-demo-data.sql       deletes ALL job data in schema ocr (demos/test only; asks for the db name)
 ```
 
 ## Build and run
