@@ -6,6 +6,8 @@
     </appender>
     <logger name="com.visionocr" level="INFO"/>
     <logger name="org.springframework.batch" level="INFO"/>
+    <!-- shows "Executing SQL script ... schema-*-sqlserver.sql" at startup (db.init=true) -->
+    <logger name="org.springframework.jdbc.datasource.init" level="DEBUG"/>
     <logger name="com.azure" level="WARN"/>
     <logger name="io.netty" level="WARN"/>
     <logger name="reactor" level="WARN"/>
