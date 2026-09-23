@@ -22,3 +22,13 @@ azure.proxy.password=
 input.dir=./data/input
 #input.dir=C:/scans/incoming
 
+
+# ---- Database ----
+# Leave commented out to use the local H2 demo database (data/db).
+# Production / shared: Microsoft SQL Server
+#db.url=jdbc:sqlserver://<server>:1433;databaseName=visionocr;encrypt=true;trustServerCertificate=false
+#db.driver=com.microsoft.sqlserver.jdbc.SQLServerDriver
+#db.platform=sqlserver
+#db.user=<sql login>
+#db.password=<password>
+#db.init=false

@@ -45,7 +45,7 @@ class EndToEndJobTest {
         createInputs(input);
 
         System.setProperty("config.file", work.resolve("none.properties").toString());
-        System.setProperty("db.url", "jdbc:h2:mem:e2e;MODE=PostgreSQL;DB_CLOSE_DELAY=-1");
+        System.setProperty("db.url", "jdbc:h2:mem:e2e;DB_CLOSE_DELAY=-1");
         System.setProperty("input.dir", input.toString());
         System.setProperty("retry.base-delay-minutes", "0");   // retry immediately on the next run
         System.setProperty("azure.endpoint", "https://unused.example");

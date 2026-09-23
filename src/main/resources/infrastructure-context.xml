@@ -29,7 +29,7 @@
     </jdbc:initialize-database>
     <!-- Application tables: idempotent script, real failures are reported. -->
     <jdbc:initialize-database data-source="dataSource" enabled="${db.init}">
-        <jdbc:script location="classpath:schema-app.sql"/>
+        <jdbc:script location="classpath:schema-app-${db.platform}.sql"/>
     </jdbc:initialize-database>
 
     <bean id="jobRepository" class="org.springframework.batch.core.repository.support.JobRepositoryFactoryBean">

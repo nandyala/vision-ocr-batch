@@ -1,6 +1,6 @@
 # Data model, retries and reprocessing
 
-DDL: `src/main/resources/schema-app.sql` (PostgreSQL and H2).
+DDL: `src/main/resources/schema-app-sqlserver.sql` (production, SQL Server) and `schema-app-h2.sql` (demo, H2).
 Operator queries: `ops/operations.sql`.
 
 ## Tables

@@ -83,7 +83,7 @@ public class IngestTasklet implements Tasklet {
                     id, null, status.name(), "INGEST", error);
             if (badSize) {
                 jdbc.update("INSERT INTO doc_error (doc_id, stage, attempt_no, error_class, error_message, retryable) "
-                        + "VALUES (?, 'INGEST', 1, 'InvalidFile', ?, FALSE)", id, error);
+                        + "VALUES (?, 'INGEST', 1, 'InvalidFile', ?, ?)", id, error, false);
             }
             added++;
             contribution.incrementWriteCount(1);

@@ -42,7 +42,7 @@ public class DocTypeViewTasklet implements Tasklet {
         for (DocTypeConfig c : registry.all()) {
             String view = viewName(c.getDocType());
             List<String> columns = columnsOf(c);
-            // Drop + create (not CREATE OR REPLACE): PostgreSQL cannot remove/reorder columns of a view in place
+            // Drop + create: works the same on H2 and SQL Server (2016+), and allows removing/reordering columns
             jdbc.execute("DROP VIEW IF EXISTS " + view);
             jdbc.execute(buildSql(view, c.getDocType(), columns));
             log.info("View {} ready ({} field columns)", view, columns.size());

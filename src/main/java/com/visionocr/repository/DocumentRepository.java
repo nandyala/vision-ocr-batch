@@ -90,12 +90,13 @@ public class DocumentRepository {
     }
 
     public void insertResult(long docId, AzureCallResult r) {
-        jdbc.update("UPDATE doc_azure_result SET is_current = FALSE WHERE doc_id = ? AND operation = ? AND is_current = TRUE",
-                docId, r.getOperation());
+        // Booleans are bound as parameters (no TRUE/FALSE literals) so the SQL runs on H2 and SQL Server alike
+        jdbc.update("UPDATE doc_azure_result SET is_current = ? WHERE doc_id = ? AND operation = ? AND is_current = ?",
+                false, docId, r.getOperation(), true);
         jdbc.update("INSERT INTO doc_azure_result (doc_id, operation, model_id, api_version, doc_confidence, "
-                        + "result_json, fields_json, duration_ms, is_current) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)",
+                        + "result_json, fields_json, duration_ms, is_current) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 docId, r.getOperation(), r.getModelId(), AzureCallResult.API_VERSION, r.getDocConfidence(),
-                storeFullJson ? r.getResultJson() : null, r.getFieldsJson(), r.getDurationMs());
+                storeFullJson ? r.getResultJson() : null, r.getFieldsJson(), r.getDurationMs(), true);
     }
 
     public void insertHistory(long docId, DocStatus from, DocStatus to, String stage, String note) {
@@ -106,9 +107,9 @@ public class DocumentRepository {
     /** Current extraction (id + simplified fields JSON), or null if the document was never extracted. */
     public CurrentExtraction currentExtraction(long docId) {
         List<CurrentExtraction> rows = jdbc.query(
-                "SELECT id, fields_json FROM doc_azure_result WHERE doc_id = ? AND operation = 'EXTRACT' AND is_current = TRUE",
+                "SELECT id, fields_json FROM doc_azure_result WHERE doc_id = ? AND operation = 'EXTRACT' AND is_current = ?",
                 (rs, n) -> new CurrentExtraction(rs.getLong("id"), rs.getString("fields_json")),
-                docId);
+                docId, true);
         return rows.isEmpty() ? null : rows.get(0);
     }
 

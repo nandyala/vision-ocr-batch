@@ -57,7 +57,9 @@ src/main/resources/
     auto-pay-auth.xml         ← one file per doc type
     _doctype-template.xml.example
   application.properties
-  schema-app.sql              doc_job, doc_azure_result, doc_field, doc_field_correction,
+  schema-app-h2.sql           tables for the H2 demo database
+  schema-app-sqlserver.sql    the same tables for SQL Server (production):
+                              doc_job, doc_azure_result, doc_field, doc_field_correction,
                               doc_status_history, doc_error, doc_reprocess_request, v_doc_field_final
 src/main/java/com/visionocr/
   azure/       DocIntelClient (seam), AzureDocIntelClient
@@ -96,7 +98,28 @@ SELECT field_name, field_value, confidence, field_status, message FROM doc_field
 SELECT stage, from_status, to_status, note FROM doc_status_history WHERE doc_id = 1 ORDER BY id;
 ```
 
-For PostgreSQL, set `db.url`, `db.driver=org.postgresql.Driver` and `db.platform=postgresql`.
+### Database: H2 for the demo, SQL Server for production
+
+H2 (a file in `data/db`) is the default, so the demo needs no database server. For SQL Server, put this in
+`application-local.properties` (or environment-specific config):
+
+```properties
+db.url=jdbc:sqlserver://<server>:1433;databaseName=visionocr;encrypt=true;trustServerCertificate=false
+db.driver=com.microsoft.sqlserver.jdbc.SQLServerDriver
+db.platform=sqlserver
+db.user=<sql login>
+db.password=<password>          # or env DB_PASSWORD
+```
+
+* `db.platform` selects the table scripts: `schema-app-h2.sql` or `schema-app-sqlserver.sql`, plus Spring
+  Batch's own `schema-<platform>.sql`. Both scripts are idempotent.
+* In production a DBA usually runs `src/main/resources/schema-app-sqlserver.sql` and
+  `org/springframework/batch/core/schema-sqlserver.sql` (inside the spring-batch-core jar) once; then set
+  `db.init=false`. The job's login then only needs read/write on the tables plus `CREATE VIEW` / `ALTER`
+  on the schema for the generated `v_doc_<doctype>` views.
+* SQL Server 2016 SP1 or later (or Azure SQL Database) is required (`CREATE OR ALTER`, `DROP ... IF EXISTS`,
+  JSON functions).
+* Keep the two schema scripts in sync when changing tables.
 
 ## Run on Windows with IntelliJ IDEA
 
@@ -112,7 +135,7 @@ For PostgreSQL, set `db.url`, `db.driver=org.postgresql.Driver` and `db.platform
    * **OCR Job - Azure:** the real job; reads `application-local.properties`
    Files to process go in `data\input\` (or `data\input\AUTO_PAY_AUTH\` to skip the classifier).
 7. **Look at the data:** *Database* tool window → *+ → Data Source → H2* →
-   URL `jdbc:h2:file:<project folder>/data/db/visionocr;MODE=PostgreSQL;AUTO_SERVER=TRUE`, user `sa`,
+   URL `jdbc:h2:file:<project folder>/data/db/visionocr;AUTO_SERVER=TRUE`, user `sa`,
    empty password. `AUTO_SERVER=TRUE` lets you keep it open while the job runs.
 
 The run configurations live in `.run/` and appear in IntelliJ automatically. From a command prompt,
@@ -136,7 +159,7 @@ Everything the job produces is stored in its database. With the default H2 setti
 1. *View → Tool Windows → Database* → **+** → *Data Source* → **H2**.
 2. Connection type **URL only**, URL (use your full project path, without `.mv.db`):
    ```
-   jdbc:h2:file:C:/path/to/OCR/data/db/visionocr;MODE=PostgreSQL;AUTO_SERVER=TRUE
+   jdbc:h2:file:C:/path/to/OCR/data/db/visionocr;AUTO_SERVER=TRUE
    ```
    User `sa`, empty password. Download the driver if IntelliJ asks → *Test Connection* → *OK*.
 
@@ -180,6 +203,16 @@ reviewer corrections:
 ```sql
 SELECT * FROM v_doc_auto_pay_auth ORDER BY doc_id;
 ```
+
+Find documents by a field value (indexed):
+
+```sql
+SELECT j.id, j.file_name, j.status FROM doc_field f JOIN doc_job j ON j.id = f.doc_id
+WHERE f.field_name = 'lenderAccountNumber' AND f.value_key = 'LN-4455667';
+```
+
+On SQL Server you can also read the JSON directly:
+`SELECT JSON_VALUE(extracted_json, '$.routingNumber') FROM doc_job WHERE id = 1;`
 
 All fields of all documents as rows, with reviewer corrections applied (generic for every doc type):
 
@@ -260,7 +293,7 @@ See `src/main/resources/application.properties`. Key settings:
 ## Security notes
 
 * Extracted values and Azure JSON are stored in plain text. Protect the database itself: access
-  control, encryption at rest (e.g. PostgreSQL/disk encryption), backups.
+  control, encryption at rest (SQL Server TDE), backups.
 * Logs never contain field values, only document ids, statuses and reason codes.
 * Secrets (Azure key, DB password) come from environment variables or `application-local.properties`,
   which is git-ignored.
@@ -272,7 +305,8 @@ See `src/main/resources/application.properties`. Key settings:
 * The Azure call runs inside the chunk transaction, so keep `batch.commit-interval` small (default 5).
   If the job crashes mid-chunk, those documents are sent to Azure again on the next run.
 * Local H2 databases created by an earlier version of this project must be deleted (`data/db`),
-  because the schema changed. For PostgreSQL, use a migration tool (Flyway/Liquibase) from here on.
+  because the schema changed. For SQL Server, use a migration tool (Flyway/Liquibase) or DBA-managed
+  change scripts from here on, since `IF NOT EXISTS` scripts don't alter existing tables.
 * Build a review UI (or connect an existing work queue) on top of `doc_job` / `doc_field`, and feed
   corrections back as training data.
 * Auto-labelling helper: generate `.labels.json` for historical documents from their known values.

@@ -70,7 +70,8 @@ public class RecoveryTasklet implements Tasklet {
                 where.append(" AND doc_type IS NOT NULL");
             } else if (stage == Stage.MAP) {
                 where.append(" AND doc_type IS NOT NULL AND EXISTS (SELECT 1 FROM doc_azure_result a "
-                        + "WHERE a.doc_id = doc_job.id AND a.operation = 'EXTRACT' AND a.is_current = TRUE)");
+                        + "WHERE a.doc_id = doc_job.id AND a.operation = 'EXTRACT' AND a.is_current = ?)");
+                args.add(Boolean.TRUE);
             }
             String target = stage.entryStatus().name();
             String note = "request #" + requestId + " by " + r.get("requested_by")
@@ -124,8 +125,8 @@ public class RecoveryTasklet implements Tasklet {
         String due = " FROM doc_job WHERE status = 'ERROR' AND next_retry_at <= ? "
                 + "AND failed_stage IN ('CLASSIFY', 'EXTRACT', 'MAP')";
         jdbc.update("INSERT INTO doc_status_history (doc_id, from_status, to_status, stage, note, changed_by) "
-                + "SELECT id, status, " + ENTRY_STATUS_CASE + ", 'RETRY', 'automatic retry after ' || retry_count "
-                + "|| ' failure(s) in ' || failed_stage, 'retry'" + due, now);
+                + "SELECT id, status, " + ENTRY_STATUS_CASE + ", 'RETRY', "
+                + "CONCAT('automatic retry after ', retry_count, ' failure(s) in ', failed_stage), 'retry'" + due, now);
         int count = jdbc.update("UPDATE doc_job SET status = " + ENTRY_STATUS_CASE + ", next_retry_at = NULL, "
                 + "updated_at = CURRENT_TIMESTAMP WHERE status = 'ERROR' AND next_retry_at <= ? "
                 + "AND failed_stage IN ('CLASSIFY', 'EXTRACT', 'MAP')", now);

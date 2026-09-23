@@ -1,6 +1,7 @@
 -- =============================================================================
--- Vision OCR - application schema
--- Idempotent (IF NOT EXISTS); runs on H2 (MODE=PostgreSQL) and PostgreSQL.
+-- Vision OCR - application schema for H2 (local / demo)
+-- Production (SQL Server) uses schema-app-sqlserver.sql - keep both in sync.
+-- Idempotent (IF NOT EXISTS).
 --
 --   doc_job                 one row per input file = current state (the "work queue")
 --   doc_azure_result        every successful Azure call: full JSON + simplified fields (history kept)
@@ -13,7 +14,7 @@
 --
 -- Field structure is generic: doc_field has one row per field, so a new doc type with
 -- different fields needs no schema change. doc_job.extracted_json holds the same values as
--- one JSON object per document. JSON is stored as TEXT (portable between H2 and PostgreSQL).
+-- one JSON object per document.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS doc_job (
     model_id            VARCHAR(200),                    -- extraction model last used
     doc_confidence      DOUBLE PRECISION,
     review_reasons      VARCHAR(2000),                   -- reason codes, semicolon separated
-    extracted_json      TEXT,                            -- {"fieldName": "value", ...} of the latest mapping
+    extracted_json      CLOB,                            -- {"fieldName": "value", ...} of the latest mapping
     failed_stage        VARCHAR(20),                     -- INGEST | CLASSIFY | EXTRACT | MAP
     retry_count         INT DEFAULT 0 NOT NULL,          -- consecutive failures of failed_stage
     next_retry_at       TIMESTAMP,                       -- when an ERROR row is retried
@@ -50,7 +51,7 @@ CREATE TABLE IF NOT EXISTS doc_job (
 );
 CREATE INDEX IF NOT EXISTS ix_doc_job_status ON doc_job (status, id);
 CREATE INDEX IF NOT EXISTS ix_doc_job_retry  ON doc_job (status, next_retry_at);
-CREATE INDEX IF NOT EXISTS ix_doc_job_type   ON doc_job (doc_type, status);
+CREATE INDEX IF NOT EXISTS ix_doc_job_type   ON doc_job (doc_type, status, created_at);
 
 -- -----------------------------------------------------------------------------
 -- doc_azure_result: every successful Azure response, never overwritten.
@@ -65,8 +66,8 @@ CREATE TABLE IF NOT EXISTS doc_azure_result (
     model_id        VARCHAR(200) NOT NULL,               -- classifier id or extraction model id
     api_version     VARCHAR(20),
     doc_confidence  DOUBLE PRECISION,
-    result_json     TEXT,                                -- full Azure AnalyzeResult
-    fields_json     TEXT,                                -- simplified fields (name, value, confidence), EXTRACT only
+    result_json     CLOB,                                -- full Azure AnalyzeResult
+    fields_json     CLOB,                                -- simplified fields (name, value, confidence), EXTRACT only
     duration_ms     BIGINT,
     is_current      BOOLEAN DEFAULT TRUE NOT NULL,       -- latest result per (doc_id, operation)
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -93,8 +94,10 @@ CREATE TABLE IF NOT EXISTS doc_field (
     message       VARCHAR(500),
     configured    BOOLEAN DEFAULT FALSE NOT NULL,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    value_key     VARCHAR(400) GENERATED ALWAYS AS (LEFT(field_value, 400)),  -- indexed search key
     CONSTRAINT uq_doc_field UNIQUE (doc_id, field_name)
 );
+CREATE INDEX IF NOT EXISTS ix_doc_field_search ON doc_field (field_name, value_key);
 
 -- -----------------------------------------------------------------------------
 -- doc_field_correction: reviewer fixes. Keyed by field name (not doc_field.id) so
