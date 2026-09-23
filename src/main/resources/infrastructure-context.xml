@@ -23,16 +23,23 @@
         <property name="dataSource" ref="dataSource"/>
     </bean>
 
-    <!-- Creates the job's objects in the dedicated schema "ocr" if they are missing.
-         Create-only scripts: nothing is dropped or altered, other schemas are never touched.
-         Failures are NOT ignored. Set db.init=false when a DBA has run the scripts. -->
-    <jdbc:initialize-database data-source="dataSource" enabled="${db.init}">
-        <jdbc:script location="classpath:schema-batch-sqlserver.sql"/>
-        <jdbc:script location="classpath:schema-app-sqlserver.sql"/>
-    </jdbc:initialize-database>
+    <!-- Creates the job's objects in the dedicated schema "ocr" if they are missing (db.init=true), then
+         logs database/login and verifies the tables. Create-only scripts: nothing is dropped or altered,
+         other schemas are never touched. -->
+    <bean id="schemaInitializer" class="com.visionocr.config.SchemaInitializer" init-method="initialize">
+        <constructor-arg index="0" ref="dataSource"/>
+        <constructor-arg index="1" value="${db.init}"/>
+        <constructor-arg index="2">
+            <list>
+                <value>classpath:schema-batch-sqlserver.sql</value>
+                <value>classpath:schema-app-sqlserver.sql</value>
+            </list>
+        </constructor-arg>
+    </bean>
 
     <!-- Spring Batch metadata lives in ocr.BATCH_* (not dbo), so it cannot clash with other applications -->
-    <bean id="jobRepository" class="org.springframework.batch.core.repository.support.JobRepositoryFactoryBean">
+    <bean id="jobRepository" class="org.springframework.batch.core.repository.support.JobRepositoryFactoryBean"
+          depends-on="schemaInitializer">
         <property name="dataSource" ref="dataSource"/>
         <property name="transactionManager" ref="transactionManager"/>
         <property name="databaseType" value="SQLSERVER"/>
