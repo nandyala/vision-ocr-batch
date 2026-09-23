@@ -1,6 +1,6 @@
 # Data model, retries and reprocessing
 
-DDL (SQL Server): `src/main/resources/schema-app-sqlserver.sql` (job tables) and `schema-batch-sqlserver.sql`
+DDL (SQL Server): `ocr-batch/src/main/resources/schema-app-sqlserver.sql` (job tables) and `schema-batch-sqlserver.sql`
 (Spring Batch tables). Everything lives in the schema `ocr`; the scripts only create missing objects
 and never drop or alter anything, so they are safe to run in an existing database.
 Operator queries: `ops/operations.sql`.
@@ -30,7 +30,7 @@ Operator queries: `ops/operations.sql`.
 | `doc_job` | Current status of each document (the queue each step reads from) + `extracted_json`: all field values as one JSON object | every step |
 | `doc_azure_result` | Every successful Azure call: the extracted fields (`fields_json`: name, value, OCR text, confidence, type), always kept. Azure's full AnalyzeResult (`result_json_gz`, compressed) only with `results.store-full-json=true`, cleared after `retention.full-json-days`. Rows are never overwritten; `is_current` marks the latest per operation | classify, extract |
 | `doc_field` | One row per extracted field (generic for every doc type): all fields the model returned, cleaned/validated where the doc type XML has rules (`configured`). `result_id` points to the Azure result | map |
-| `doc_field_correction` | Reviewer corrections. Keyed by field name, so they survive reprocessing. Also a source of training data | review UI / SQL |
+| `doc_field_correction` | Reviewer corrections (fix / confirm / undo). Keyed by field name, so they survive reprocessing. Also a source of training data | demo UI (`ocr-ui`) / SQL |
 | `doc_status_history` | Append-only audit of every status change (who, when, why) | all steps, recovery |
 | `doc_error` | Every failure: stage, attempt number, exception, HTTP status, retryable | writers, ingest |
 | `doc_reprocess_request` | Operator requests to push documents back into the pipeline | operators |

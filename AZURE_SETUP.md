@@ -170,7 +170,7 @@ export AZURE_DI_ENDPOINT="https://di-vision-ocr-dev.cognitiveservices.azure.com/
 export AZURE_DI_KEY="<key>"                      # omit to use managed identity / az login
 export AZURE_DI_CLASSIFIER_ID="vision-ocr-classifier-v1"
 # model id per doc type:
-java -Ddoctype.auto-pay-auth.model-id=autopay-neural-v1 -jar target/vision-ocr-batch.jar job-context.xml docExtractionJob -next
+java -Ddoctype.auto-pay-auth.model-id=autopay-neural-v1 -jar ocr-batch/target/vision-ocr-batch.jar job-context.xml docExtractionJob -next
 ```
 
 **Keyless (recommended for prod):** leave `AZURE_DI_KEY` empty. The app then uses
@@ -209,7 +209,7 @@ disable local (key) authentication on the resource.
 1. Collect and upload its samples → label → train `dispute-neural-v1` (steps 4–5).
 2. Add a `dispute_form/` folder to the classifier data and retrain the classifier as
    `vision-ocr-classifier-v2` (step 6). Update `AZURE_DI_CLASSIFIER_ID`.
-3. Copy `src/main/resources/doctypes/_doctype-template.xml.example` to `dispute.xml` and fill it in.
+3. Copy `ocr-batch/src/main/resources/doctypes/_doctype-template.xml.example` to `dispute.xml` and fill it in.
 4. Build and run. No Java changes are needed.
 
 ---

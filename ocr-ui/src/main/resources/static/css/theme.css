@@ -1,0 +1,62 @@
+/* ==========================================================================
+   Brand theme - TD palette and typography. The only file with brand values.
+
+   Colours: TD's public brand greens (logo green PMS 360 #54B848, web green #008A00,
+   dark green #1A5336).
+
+   Typeface: TD Graphik. It is licensed, so it is NOT part of this repository:
+     * On TD machines where TD Graphik is installed, it is used automatically.
+     * Otherwise put the web font files you get from the brand team into the local
+       folder ./brand (setting ui.brand-dir, git-ignored) together with a fonts.css, e.g.
+         @font-face { font-family: "TD Graphik"; font-weight: 400; src: url("/brand/TDGraphik-Regular.woff2") format("woff2"); }
+         @font-face { font-family: "TD Graphik"; font-weight: 500; src: url("/brand/TDGraphik-Medium.woff2")  format("woff2"); }
+         @font-face { font-family: "TD Graphik"; font-weight: 600; src: url("/brand/TDGraphik-Semibold.woff2") format("woff2"); }
+     * brand/logo.svg (or logo.png): the official logo for the header.
+   Without them the UI falls back to Segoe UI / system fonts and a neutral icon.
+   ========================================================================== */
+:root {
+  --font: "TD Graphik", "TDGraphik", "Graphik", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  /* greens */
+  --g-950: #0b2e1d;
+  --g-900: #123f29;
+  --g-800: #1a5336;   /* TD dark green: app bar, headings */
+  --g-700: #006d00;   /* hover of primary */
+  --g-600: #008a00;   /* TD web green: primary actions, links, focus */
+  --g-500: #2e9e2b;
+  --g-400: #54b848;   /* TD logo green: accents, progress, highlights */
+  --g-200: #cfe8cb;
+  --g-100: #e7f4e4;
+  --g-50:  #f3f9f1;
+
+  /* neutrals */
+  --ink:     #1c1c1c;
+  --ink-2:   #404040;
+  --ink-3:   #616161;
+  --ink-4:   #8c8c8c;
+  --line:    #e1e4e2;
+  --line-2:  #eef0ee;
+  --surface: #ffffff;
+  --canvas:  #f5f6f5;
+
+  /* status */
+  --ok: #008a00;      --ok-bg: #e7f4e4;
+  --warn: #8a5300;    --warn-bg: #fff4de;  --warn-line: #f0c36d;  --warn-solid: #e3a008;
+  --danger: #b3261e;  --danger-bg: #fdecea; --danger-line: #f1b5b0;
+  --info: #1f5fa8;    --info-bg: #e9f1fb;   --info-line: #bcd3f0;
+  --violet: #6b4fbb;  --violet-bg: #f0ecfb;
+
+  /* chart series */
+  --c-completed: #008a00;
+  --c-review: #e3a008;
+  --c-failed: #b3261e;
+  --c-progress: #7aa7d9;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow-1: 0 1px 2px rgba(16, 40, 28, .06), 0 2px 8px rgba(16, 40, 28, .04);
+  --shadow-2: 0 8px 28px rgba(16, 40, 28, .12);
+  --appbar-h: 64px;
+  --nav-w: 248px;
+}

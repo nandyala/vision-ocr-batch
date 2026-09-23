@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <!-- Demo web app (Spring Boot) on http://localhost:8080. Same settings as the job:
+       application-local.properties in the project root (not committed to git). -->
+  <configuration default="false" name="OCR Demo UI" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.visionocr.ui.OcrUiApplication" />
+    <module name="vision-ocr-ui" />
+    <option name="VM_PARAMETERS" value="-Dconfig.file=application-local.properties -Dfile.encoding=UTF-8" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

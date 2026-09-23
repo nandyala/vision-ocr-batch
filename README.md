@@ -1,13 +1,21 @@
-# Vision OCR Batch
+# Vision OCR
 
 Spring Batch job (**pure XML configuration, no annotations**) that extracts fields from scanned
 PDF/TIFF documents with **Azure Document Intelligence**. Doc types are plug-ins: each one is a single
 XML file, and adding a doc type needs no Java change.
 
+Two Maven modules:
+
+| Module | What | Artifact |
+|---|---|---|
+| `ocr-batch` | the batch job (Spring Batch, XML only) | `ocr-batch/target/vision-ocr-batch.jar` |
+| `ocr-ui` | **demo web app** (Spring Boot): upload, review & corrections, data explorer, model insights, operations, doc type designer. Runs the same job in-process. | `ocr-ui/target/vision-ocr-ui.jar` |
+
 The first doc type is `AUTO_PAY_AUTH` (Automatic Payment Authorization Agreement).
 
 * Azure setup (resource, labelling, training): **[AZURE_SETUP.md](AZURE_SETUP.md)**
 * Tables, retries and reprocessing: **[DATA_MODEL.md](DATA_MODEL.md)**. Operator SQL: `ops/operations.sql`
+* Demo UI: **[Demo UI](#demo-ui-ocr-ui)** below
 
 ---
 
@@ -50,7 +58,9 @@ The first doc type is `AUTO_PAY_AUTH` (Automatic Payment Authorization Agreement
 ## Project layout
 
 ```
-src/main/resources/
+pom.xml                       parent (modules ocr-batch, ocr-ui)
+ocr-batch/                    THE BATCH JOB
+ src/main/resources/
   job-context.xml             entry point: job + steps
   infrastructure-context.xml  datasource, tx, job repository/launcher
   pipeline-context.xml        readers/processors/writers + shared normalizer/validator beans
@@ -63,13 +73,19 @@ src/main/resources/
   schema-app-sqlserver.sql    job tables, all in schema ocr:
                               doc_job, doc_azure_result, doc_field, doc_field_correction,
                               doc_status_history, doc_error, doc_reprocess_request, v_doc_field_final
-src/main/java/com/visionocr/
+ocr-batch/src/main/java/com/visionocr/
   azure/       DocIntelClient (seam), AzureDocIntelClient
   batch/       tasklets (recovery, ingest, summary), processors, writers, RetryPolicy
   repository/  DocumentRepository - all pipeline writes (status, Azure JSON, errors, history, fields)
   config/      DocTypeConfig, FieldMapping, DocTypeRegistry
   mapping/     FieldMappingService + normalizers
   validation/  field validators + cross-field rules (ABA checksum, fuzzy name match...)
+ocr-ui/                       DEMO WEB APP (Spring Boot 3.5)
+  src/main/java/com/visionocr/ui/   REST API (web/), services (service/), job launcher (job/)
+  src/main/resources/application.yml  UI settings (port, brand folder, ...)
+  src/main/resources/static/          single-page app (no build step): index.html, css/, js/
+doctypes/                     doc types created in the UI's designer (loaded by the job and the UI)
+brand/                        (not in git) logo + licensed fonts for the UI
 scripts/azure-train.sh        train model/classifier via REST
 ops/operations.sql            monitoring, reprocess, correction and housekeeping queries
 ops/reset-demo-data.sql       deletes ALL job data in schema ocr (demos/test only; asks for the db name)
@@ -80,16 +96,17 @@ ops/reset-demo-data.sql       deletes ALL job data in schema ocr (demos/test onl
 Requirements: **JDK 17+**, **Maven 3.9+**.
 
 ```bash
-mvn clean package              # unit tests; the end-to-end test runs only with a test SQL Server (see below)
+mvn clean package              # from the project root: builds both modules and runs the unit tests
+                               # (the end-to-end test runs only with a test SQL Server, see below)
 
-./run.sh                       # real Azure: set AZURE_DI_ENDPOINT, AZURE_DI_KEY (or managed identity),
-                               #             AZURE_DI_CLASSIFIER_ID (optional)
+./run.sh                       # the batch job, real Azure (settings: application-local.properties)
+./run.sh ui                    # the demo web app on http://localhost:8080
 ```
 
 Direct launch (Spring Batch `CommandLineJobRunner`):
 
 ```bash
-java -jar target/vision-ocr-batch.jar job-context.xml docExtractionJob -next
+java -jar ocr-batch/target/vision-ocr-batch.jar job-context.xml docExtractionJob -next
 # override any property:  -Dbatch.commit-interval=10 -Dinput.dir=/mnt/scans -Dconfig.file=/etc/ocr/app.properties
 ```
 
@@ -142,15 +159,17 @@ Without these settings it is skipped. The test uses unique file names per run, s
 ## Run on Windows with IntelliJ IDEA
 
 1. **Install:** JDK 17 or newer (e.g. Eclipse Temurin 17/21) and IntelliJ IDEA. Maven is bundled with IntelliJ.
-2. **Open:** *File → Open* → select the project folder (the one with `pom.xml`) → *Open as Project*.
-   Wait for the Maven import to finish (bottom-right progress bar).
+2. **Open:** *File → Open* → select the project folder (the one with the parent `pom.xml`) → *Open as Project*.
+   Wait for the Maven import to finish (bottom-right progress bar). IntelliJ shows two modules,
+   `vision-ocr-batch` and `vision-ocr-ui`.
 3. **JDK:** *File → Project Structure → Project → SDK* = your JDK 17+. Set *Language level* to 17.
 4. **Azure settings:** copy `application-local.properties.example` to `application-local.properties`
    (project root) and fill in the endpoint, key, classifier id and model id. This file is git-ignored.
-5. **Build + test:** Maven tool window (right side) → *vision-ocr-batch → Lifecycle → package*,
+5. **Build + test:** Maven tool window (right side) → *Vision OCR (root) → Lifecycle → package*,
    or run the **All tests** configuration.
 6. **Run:** pick a configuration in the top-right drop-down and press ▶:
    * **OCR Job - Azure:** the real job; reads `application-local.properties`
+   * **OCR Demo UI:** the web app on <http://localhost:8080>; same settings file
    Files to process go in `data\input\` (or `data\input\AUTO_PAY_AUTH\` to skip the classifier).
 7. **Look at the data:** in SQL Server Management Studio / Azure Data Studio, or IntelliJ Ultimate's
    *Database* tool window (*+ → Data Source → Microsoft SQL Server*). The tables are in schema `ocr`.
@@ -163,6 +182,67 @@ The run configurations live in `.run/` and appear in IntelliJ automatically. Fro
 * If your company uses a proxy, add `-Dhttps.proxyHost=... -Dhttps.proxyPort=...` to the run
   configuration's VM options so the job can reach `*.cognitiveservices.azure.com`.
 * "Cannot resolve symbol" errors in the editor: Maven tool window → *Reload All Maven Projects*.
+
+## Demo UI (`ocr-ui`)
+
+A Spring Boot web app for demos and reviewers. It loads the batch module's XML configuration
+(`@ImportResource("classpath:job-context.xml")`), so it uses the **same database, Azure settings and doc
+types**, and it runs `docExtractionJob` in-process right after every upload.
+
+**Start:** IntelliJ run configuration **OCR Demo UI**, or `./run.sh ui` / `run.bat ui`, then open
+<http://localhost:8080>. Settings come from `application-local.properties` like the job.
+
+| Screen | What you can do |
+|---|---|
+| **Overview** | KPIs (straight-through rate, field accuracy, time to result, review queue), daily volume, confidence distribution, most flagged fields, live activity |
+| **Upload** | drag & drop one or many files, pick the doc type or let it be detected, watch each file move through classify → extract → validate |
+| **Review queue** | documents in `REVIEW`, oldest first; *Start reviewing* walks through them one by one |
+| **Document** | original next to the extracted fields; confidence per field; account/routing numbers masked (click the eye); **Fix / Confirm / Undo** per field; approve; send back to review; re-validate / re-extract; timeline, Azure calls (field JSON), details |
+| **Documents** | search by file name, `#id` or **any extracted value**; filter by status, type, date, corrected-only |
+| **Data explorer** | one row per document, one column per field (final values; corrected cells green, flagged amber); CSV export |
+| **Model insights** | accuracy per field, correction reasons, reviewers, correction log; **CSV export of corrections for retraining** |
+| **Operations** | live job status, work queue (retries / failed), grouped errors, job runs with step details, reprocess requests (create new ones) |
+| **Configuration** | doc types with their fields and rules; **doc type designer** (import the field list from the Azure model, pick clean-up steps and checks, preview the XML, save); effective settings (secrets hidden) |
+
+### How corrections work (`doc_field_correction`)
+
+The model's value in `doc_field` is never changed. A reviewer action adds a row to
+`ocr.doc_field_correction` (in one transaction with a `doc_status_history` row):
+
+| UI action | What is stored |
+|---|---|
+| **Fix** (new value + reason: misread, wrong place, not extracted, format, other + optional comment) | new active row: `original_value` (model), `corrected_value`, `reason`, `comment_text`, `corrected_by`. The previous active row for that field is set `active = 0` |
+| **Confirm** (flagged value is actually right) | active row with `reason = CONFIRMED` and the model value (counts as correct in the accuracy numbers) |
+| **Undo** | the active row is set `active = 0` - the model value applies again |
+| **Approve** | `REVIEW → COMPLETED`, history row with the reviewer and note |
+
+`ocr.v_doc_field_final` and the per doc type views return the corrected value, so downstream systems
+always get the reviewed data. Corrections survive reprocessing (they are keyed by field name), and
+*Model insights → Export* gives the labelled data for the next training round. *History* on a field
+shows every version.
+
+### TD look and feel (brand assets)
+
+The UI uses TD's public brand greens (`ocr-ui/src/main/resources/static/css/theme.css`). The **TD logo and
+the TD Graphik typeface are licensed brand assets and are not in this repository.** Get them from your
+brand / marketing team and put them in the local folder `brand/` (git-ignored, setting `ui.brand-dir`):
+
+```
+brand/logo.svg          (or logo.png) - shown in the header
+brand/fonts.css         @font-face rules, e.g.
+                          @font-face { font-family: "TD Graphik"; font-weight: 400; src: url("/brand/TDGraphik-Regular.woff2") format("woff2"); }
+brand/*.woff2           the font files referenced by fonts.css
+```
+
+If TD Graphik is installed on the computer, it is used even without `fonts.css`.
+Without these files the UI shows a neutral icon and Segoe UI / system fonts.
+
+### Security (demo)
+
+* No login: the server listens on `127.0.0.1` only. Change `server.address` only on a trusted network.
+* The reviewer name typed in the header is stored with every correction and approval (audit), but it is
+  not authenticated.
+* The UI never returns file paths, the Azure key or the DB password.
 
 ## Viewing the extracted data
 
@@ -266,6 +346,11 @@ The field list in the XML is optional and only adds rules (rename, cleanup, vali
    * `crossFieldRules`: optional
 3. Build and run. `DocTypeRegistry` picks up every `DocTypeConfig` bean automatically.
 
+Or, without a build: create it in the demo UI (*Configuration → New document type*). The designer writes
+the same XML into the `doctypes/` folder (setting `doctypes.dir`), activates it in the running UI at once,
+and the batch job loads it at its next start. Move the file into `ocr-batch/src/main/resources/doctypes/`
+to ship it inside the jar.
+
 Reusable building blocks (defined in `pipeline-context.xml`):
 `norm.whitespace`, `norm.upper`, `norm.lower`, `norm.digits`, `norm.date`, `norm.amount`,
 `val.abaRouting`, `val.isoDate`, `val.signed`, plus the `RegexReplaceNormalizer`, `RegexValidator`,
@@ -277,7 +362,7 @@ Table/array fields are flattened as `Items[0].Amount`, `Items[1].Amount`, and so
 
 ## Configuration reference
 
-See `src/main/resources/application.properties`. Key settings:
+See `ocr-batch/src/main/resources/application.properties` (UI: `ocr-ui/src/main/resources/application.yml`). Key settings:
 
 | Property | Env var | Meaning |
 |---|---|---|
@@ -292,6 +377,9 @@ See `src/main/resources/application.properties`. Key settings:
 | `retention.full-json-days` | – | clear the full Azure JSON after N days (default 180; re-mapping still works) |
 | `retention.history-days` | – | delete `doc_status_history` / `doc_error` rows after N days (default 730) |
 | `retention.batch-metadata-days` | – | delete Spring Batch run records after N days (default 90) |
+| `doctypes.dir` (system property) | – | folder with extra doc type XML files (default `./doctypes`) |
+| `server.port` / `server.address` (UI) | – | demo UI port (8080) and bind address (127.0.0.1 = this computer only) |
+| `ui.brand-dir` (UI) | – | folder with `logo.svg` and licensed font files (default `./brand`, git-ignored) |
 
 ## Security notes
 
@@ -309,6 +397,6 @@ See `src/main/resources/application.properties`. Key settings:
   If the job crashes mid-chunk, those documents are sent to Azure again on the next run.
 * The schema scripts only create missing objects. Changes to existing tables need a migration
   (Flyway/Liquibase or DBA-managed change scripts).
-* Build a review UI (or connect an existing work queue) on top of `doc_job` / `doc_field`, and feed
-  corrections back as training data.
+* The demo UI has no login. For real use put it behind the bank's SSO (e.g. Spring Security + Entra ID)
+  and take the reviewer name from the login instead of the header field.
 * Auto-labelling helper: generate `.labels.json` for historical documents from their known values.

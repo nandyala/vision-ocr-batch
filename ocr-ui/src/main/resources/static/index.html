@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Document Intelligence</title>
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/brand/fonts.css" onerror="this.remove()">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="appbar">
+    <button class="appbar__menu icon-btn" type="button" aria-label="Menu" data-action="toggle-nav">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <a class="brand" href="#/overview" aria-label="Home">
+      <span class="brand__logo" id="brand-logo" aria-hidden="true"></span>
+      <span class="brand__divider" aria-hidden="true"></span>
+      <span class="brand__name" id="product-name">Document Intelligence</span>
+      <span class="brand__env">Demo</span>
+    </a>
+    <form class="appbar__search" role="search" id="global-search">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input type="search" name="q" placeholder="Search documents, names, account numbers…" aria-label="Search all documents" autocomplete="off">
+      <kbd>/</kbd>
+    </form>
+    <div class="appbar__right">
+      <button class="job-pill" id="job-pill" type="button" title="Batch job status" data-href="#/operations">
+        <span class="job-pill__dot"></span><span class="job-pill__text">Ready</span>
+      </button>
+      <button class="user" id="user-btn" type="button" aria-label="Change reviewer">
+        <span class="user__avatar" aria-hidden="true">?</span>
+        <span class="user__text"><span class="user__name">Set reviewer</span><span class="user__role">Reviewer</span></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="nav" id="nav" aria-label="Main">
+      <div class="nav__group">
+        <a class="nav__item" href="#/overview" data-nav="overview"><span class="nav__icon" data-icon="home"></span>Overview</a>
+        <a class="nav__item" href="#/upload" data-nav="upload"><span class="nav__icon" data-icon="upload"></span>Upload</a>
+        <a class="nav__item" href="#/review" data-nav="review"><span class="nav__icon" data-icon="review"></span>Review queue<span class="nav__badge" id="review-count" hidden>0</span></a>
+        <a class="nav__item" href="#/documents" data-nav="documents"><span class="nav__icon" data-icon="docs"></span>Documents</a>
+      </div>
+      <div class="nav__label">Analyse</div>
+      <div class="nav__group">
+        <a class="nav__item" href="#/data" data-nav="data"><span class="nav__icon" data-icon="grid"></span>Data explorer</a>
+        <a class="nav__item" href="#/insights" data-nav="insights"><span class="nav__icon" data-icon="chart"></span>Model insights</a>
+      </div>
+      <div class="nav__label">Manage</div>
+      <div class="nav__group">
+        <a class="nav__item" href="#/operations" data-nav="operations"><span class="nav__icon" data-icon="ops"></span>Operations</a>
+        <a class="nav__item" href="#/config" data-nav="config"><span class="nav__icon" data-icon="settings"></span>Configuration</a>
+      </div>
+      <div class="nav__foot">
+        <div class="nav__foot-title">Powered by</div>
+        <div>Azure AI Document Intelligence</div>
+        <div>Spring Batch · SQL Server</div>
+      </div>
+    </nav>
+    <main class="main" id="main" tabindex="-1"></main>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <dialog class="dialog" id="dialog">
+    <form method="dialog" class="dialog__form">
+      <div class="dialog__head">
+        <h2 class="dialog__title"></h2>
+        <button class="icon-btn" value="cancel" type="submit" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="dialog__body"></div>
+      <div class="dialog__actions">
+        <button class="btn btn--ghost dialog__cancel" value="cancel" type="submit">Cancel</button>
+        <button class="btn btn--primary dialog__ok" value="ok" type="submit">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

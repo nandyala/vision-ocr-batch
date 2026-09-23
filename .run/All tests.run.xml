@@ -2,6 +2,7 @@
   <configuration default="false" name="All tests" type="JUnit" factoryName="JUnit">
     <module name="vision-ocr-batch" />
     <option name="PACKAGE_NAME" value="com.visionocr" />
+    <option name="TEST_SEARCH_SCOPE"><value defaultName="wholeProject" /></option>
     <option name="TEST_OBJECT" value="package" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="VM_PARAMETERS" value="-Dfile.encoding=UTF-8" />

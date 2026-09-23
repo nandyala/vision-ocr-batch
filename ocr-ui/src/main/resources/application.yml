@@ -1,0 +1,38 @@
+# Demo UI (Spring Boot). Batch settings (db.*, azure.*, input.*, ...) come from ocr-batch's
+# application.properties and your ./application-local.properties - nothing to repeat here.
+server:
+  # 127.0.0.1 = only this computer. The demo has no login: use 0.0.0.0 only on a trusted network.
+  address: 127.0.0.1
+  port: 8080
+  compression:
+    enabled: true
+
+spring:
+  application:
+    name: vision-ocr-ui
+  main:
+    # the batch XML files are also used stand-alone; tolerate re-declared beans
+    allow-bean-definition-overriding: true
+  autoconfigure:
+    # the job repository/launcher are defined in ocr-batch's infrastructure-context.xml
+    exclude:
+      - org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration
+  batch:
+    job:
+      enabled: false
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 500MB
+  jackson:
+    default-property-inclusion: always
+
+ui:
+  # Local folder with brand assets (logo.svg, licensed font files, fonts.css). Not in git - see README.
+  brand-dir: ./brand
+  # Name shown in the header
+  product-name: Document Intelligence
+  # Run the batch job right after an upload (true for the demo)
+  run-job-on-upload: true
+  # Folder where doc types created in the designer are saved (must match the batch's doctypes.dir)
+  doctypes-dir: ${doctypes.dir:./doctypes}
