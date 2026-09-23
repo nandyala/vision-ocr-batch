@@ -125,6 +125,91 @@ The run configurations live in `.run/` and appear in IntelliJ automatically. Fro
   configuration's VM options so the job can reach `*.cognitiveservices.azure.com`.
 * "Cannot resolve symbol" errors in the editor: Maven tool window → *Reload All Maven Projects*.
 
+## Viewing the extracted data
+
+Everything the job produces is stored in its database. With the default H2 settings that is the file
+`data/db/visionocr.mv.db` in the project folder.
+
+### Open the database
+
+**IntelliJ IDEA Ultimate** (Database tool window):
+
+1. *View → Tool Windows → Database* → **+** → *Data Source* → **H2**.
+2. Connection type **URL only**, URL (use your full project path, without `.mv.db`):
+   ```
+   jdbc:h2:file:C:/path/to/OCR/data/db/visionocr;MODE=PostgreSQL;AUTO_SERVER=TRUE
+   ```
+   User `sa`, empty password. Download the driver if IntelliJ asks → *Test Connection* → *OK*.
+
+**IntelliJ Community / no Database window:** start the H2 web console (the jar is already in your
+Maven repository), then paste the same URL, user `sa`, and click *Connect*:
+
+```powershell
+java -cp "$env:USERPROFILE\.m2\repository\com\h2database\h2\2.3.232\h2-2.3.232.jar" org.h2.tools.Console
+```
+
+DBeaver (free) works the same way. `AUTO_SERVER=TRUE` lets you keep the database open while the job runs.
+
+### Useful queries
+
+Each document and its outcome:
+
+```sql
+SELECT id, file_name, status, doc_type, model_id, doc_confidence, review_reasons, last_error
+FROM doc_job ORDER BY id;
+```
+
+Extracted fields of one document (`field_status` = OK | MISSING | LOW_CONFIDENCE | INVALID,
+`message` says why; sensitive values are masked in `display_value` and encrypted in `field_value`):
+
+```sql
+SELECT field_name, display_value, confidence, field_status, message
+FROM doc_field WHERE doc_id = 1 ORDER BY field_name;
+```
+
+One row per document with all fields side by side (reviewer corrections win over model values):
+
+```sql
+SELECT j.id, j.file_name, j.status,
+  MAX(CASE WHEN f.field_name = 'customerName'          THEN f.display_value END) AS customer_name,
+  MAX(CASE WHEN f.field_name = 'lenderAccountNumber'   THEN f.display_value END) AS account_no,
+  MAX(CASE WHEN f.field_name = 'bankAccountHolderName' THEN f.display_value END) AS holder,
+  MAX(CASE WHEN f.field_name = 'bankName'              THEN f.display_value END) AS bank,
+  MAX(CASE WHEN f.field_name = 'routingNumber'         THEN f.display_value END) AS routing,
+  MAX(CASE WHEN f.field_name = 'checkingAccountNumber' THEN f.display_value END) AS checking,
+  MAX(CASE WHEN f.field_name = 'signature'             THEN f.display_value END) AS signature
+FROM doc_job j LEFT JOIN v_doc_field_final f ON f.doc_id = j.id
+GROUP BY j.id, j.file_name, j.status ORDER BY j.id;
+```
+
+Exactly what Azure returned, including fields the job does not map (`fields_json` is plain JSON
+while no `security.field-encryption-key` is set; the full Azure response is in `result_json`):
+
+```sql
+SELECT id, model_id, doc_confidence, fields_json
+FROM doc_azure_result WHERE doc_id = 1 AND operation = 'EXTRACT' AND is_current = TRUE;
+```
+
+History and errors of one document:
+
+```sql
+SELECT changed_at, stage, from_status, to_status, note FROM doc_status_history WHERE doc_id = 1 ORDER BY id;
+SELECT stage, attempt_no, http_status, error_message FROM doc_error WHERE doc_id = 1 ORDER BY id;
+```
+
+### Fields showing MISSING?
+
+Usually the field names in the Azure model differ from `azureField` in `doctypes/auto-pay-auth.xml`
+(names are case-sensitive). Compare them with the keys in `fields_json`, fix the XML, then re-map the
+documents without calling Azure again:
+
+```sql
+INSERT INTO doc_reprocess_request (from_stage, doc_type, current_status, reason, requested_by)
+VALUES ('MAP', 'AUTO_PAY_AUTH', 'REVIEW', 'field names aligned', 'me');
+```
+
+More queries: `ops/operations.sql`.
+
 ## Adding a document type (no Java changes)
 
 1. **Azure:** train an extraction model for it, and add its class to the classifier (AZURE_SETUP.md §10).
