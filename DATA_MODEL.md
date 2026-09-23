@@ -28,7 +28,7 @@ Operator queries: `ops/operations.sql`.
 | Table | Purpose | Written by |
 |---|---|---|
 | `doc_job` | Current status of each document (the queue each step reads from) + `extracted_json`: all field values as one JSON object | every step |
-| `doc_azure_result` | Every successful Azure call: full AnalyzeResult JSON (`result_json_gz`, GZIP-compressed with SQL Server `COMPRESS`, cleared after `retention.full-json-days`) and simplified fields (`fields_json`, kept). Rows are never overwritten; `is_current` marks the latest per operation | classify, extract |
+| `doc_azure_result` | Every successful Azure call: the extracted fields (`fields_json`: name, value, OCR text, confidence, type), always kept. Azure's full AnalyzeResult (`result_json_gz`, compressed) only with `results.store-full-json=true`, cleared after `retention.full-json-days`. Rows are never overwritten; `is_current` marks the latest per operation | classify, extract |
 | `doc_field` | One row per extracted field (generic for every doc type): all fields the model returned, cleaned/validated where the doc type XML has rules (`configured`). `result_id` points to the Azure result | map |
 | `doc_field_correction` | Reviewer corrections. Keyed by field name, so they survive reprocessing. Also a source of training data | review UI / SQL |
 | `doc_status_history` | Append-only audit of every status change (who, when, why) | all steps, recovery |

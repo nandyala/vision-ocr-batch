@@ -220,8 +220,8 @@ FROM ocr.doc_job j JOIN ocr.v_doc_field_final f ON f.doc_id = j.id
 ORDER BY j.id, f.field_name;
 ```
 
-Exactly what Azure returned, including fields the job does not map (`fields_json`; the full Azure
-response is stored compressed, see `ops/operations.sql` for `DECOMPRESS`):
+Exactly what Azure returned for each field, including fields the job does not map (`fields_json`).
+Azure's full response is only kept with `results.store-full-json=true`:
 
 ```sql
 SELECT id, model_id, doc_confidence, fields_json
@@ -286,7 +286,7 @@ See `src/main/resources/application.properties`. Key settings:
 | `doctype.auto-pay-auth.model-id` | – | extraction model for AUTO_PAY_AUTH (currently `autopay-neural-v2`) |
 | `reference.routing-directory-csv` | – | optional `routing,bankName` CSV for the bank-name cross-check |
 | `retry.max-attempts` / `retry.base-delay-minutes` / `retry.max-delay-minutes` | – | automatic retry and back-off |
-| `results.store-full-json` | – | keep the full Azure JSON (`false` = simplified fields only); stored compressed |
+| `results.store-full-json` | – | `false` (default): store only the extracted fields JSON. `true`: also keep Azure's full response (compressed) |
 | `batch.threads` | – | documents sent to Azure in parallel (default 4; keep within your Azure TPS limit, `db.pool-size` ≥ threads + 2) |
 | `retention.full-json-days` | – | clear the full Azure JSON after N days (default 180; re-mapping still works) |
 | `retention.history-days` | – | delete `doc_status_history` / `doc_error` rows after N days (default 730) |
