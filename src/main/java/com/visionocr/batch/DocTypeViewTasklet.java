@@ -17,7 +17,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Generates one flat view per doc type, e.g. v_doc_auto_pay_auth: one row per document, one column
+ * Generates one flat view per doc type in schema ocr, e.g. ocr.v_doc_auto_pay_auth: one row per document, one column
  * per field (values from v_doc_field_final, so reviewer corrections are included).
  * <p>
  * Columns come from the doc type XML - {@code viewColumns} if set, otherwise every field in
@@ -42,7 +42,11 @@ public class DocTypeViewTasklet implements Tasklet {
         for (DocTypeConfig c : registry.all()) {
             String view = viewName(c.getDocType());
             List<String> columns = columnsOf(c);
-            // Drop + create: works the same on H2 and SQL Server (2016+), and allows removing/reordering columns
+            // Drop + create so columns can be removed/reordered. Safe in a shared database: the name is
+            // always ocr.v_doc_<doctype> (schema ocr, owned by this job) - nothing else can be dropped.
+            if (!view.matches("ocr\\.v_doc_[a-z0-9_]+")) {
+                throw new IllegalStateException("Refusing to drop unexpected view name " + view);
+            }
             jdbc.execute("DROP VIEW IF EXISTS " + view);
             jdbc.execute(buildSql(view, c.getDocType(), columns));
             log.info("View {} ready ({} field columns)", view, columns.size());
@@ -72,15 +76,15 @@ public class DocTypeViewTasklet implements Tasklet {
             sql.append(",\n  MAX(CASE WHEN f.field_name = '").append(field.replace("'", "''"))
                     .append("' THEN f.final_value END) AS \"").append(col).append('"');
         }
-        sql.append("\nFROM doc_job j LEFT JOIN v_doc_field_final f ON f.doc_id = j.id")
+        sql.append("\nFROM ocr.doc_job j LEFT JOIN ocr.v_doc_field_final f ON f.doc_id = j.id")
                 .append("\nWHERE j.doc_type = '").append(docType.replace("'", "''")).append('\'')
                 .append("\nGROUP BY j.id, j.file_name, j.status, j.review_reasons, j.model_id, j.doc_confidence, j.updated_at");
         return sql.toString();
     }
 
-    /** v_doc_ + doc type in lower case, letters/digits/underscore only. */
+    /** ocr.v_doc_ + doc type in lower case, letters/digits/underscore only. Always in schema ocr. */
     static String viewName(String docType) {
-        return "v_doc_" + docType.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
+        return "ocr.v_doc_" + docType.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
     }
 
     /** Safe, unique column name: "Items[0].Amount" -> "Items_0_Amount". */

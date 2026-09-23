@@ -25,7 +25,7 @@ public class JobSummaryTasklet implements Tasklet {
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT COALESCE(doc_type, '-') AS doc_type, status, COUNT(*) AS cnt FROM doc_job "
+                "SELECT COALESCE(doc_type, '-') AS doc_type, status, COUNT(*) AS cnt FROM ocr.doc_job "
                         + "GROUP BY doc_type, status ORDER BY doc_type, status");
         log.info("===== Document summary =====");
         for (Map<String, Object> r : rows) {

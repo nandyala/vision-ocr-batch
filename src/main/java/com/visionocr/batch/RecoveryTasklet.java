@@ -49,7 +49,7 @@ public class RecoveryTasklet implements Tasklet {
 
     void applyReprocessRequests() {
         List<Map<String, Object>> requests = jdbc.queryForList(
-                "SELECT * FROM doc_reprocess_request WHERE state = 'PENDING' ORDER BY id");
+                "SELECT * FROM ocr.doc_reprocess_request WHERE state = 'PENDING' ORDER BY id");
         for (Map<String, Object> r : requests) {
             long requestId = ((Number) r.get("id")).longValue();
             Stage stage = Stage.valueOf((String) r.get("from_stage"));
@@ -69,7 +69,7 @@ public class RecoveryTasklet implements Tasklet {
             if (stage == Stage.EXTRACT) {
                 where.append(" AND doc_type IS NOT NULL");
             } else if (stage == Stage.MAP) {
-                where.append(" AND doc_type IS NOT NULL AND EXISTS (SELECT 1 FROM doc_azure_result a "
+                where.append(" AND doc_type IS NOT NULL AND EXISTS (SELECT 1 FROM ocr.doc_azure_result a "
                         + "WHERE a.doc_id = doc_job.id AND a.operation = 'EXTRACT' AND a.is_current = ?)");
                 args.add(Boolean.TRUE);
             }
@@ -81,11 +81,11 @@ public class RecoveryTasklet implements Tasklet {
             historyArgs.add(target);
             historyArgs.add(note.length() > 1990 ? note.substring(0, 1990) : note);
             historyArgs.addAll(args);
-            jdbc.update("INSERT INTO doc_status_history (doc_id, from_status, to_status, stage, note, changed_by) "
-                    + "SELECT id, status, ?, 'REPROCESS', ?, 'reprocess' FROM doc_job" + where, historyArgs.toArray());
-            jdbc.update("DELETE FROM doc_field WHERE doc_id IN (SELECT id FROM doc_job" + where + ")", args.toArray());
+            jdbc.update("INSERT INTO ocr.doc_status_history (doc_id, from_status, to_status, stage, note, changed_by) "
+                    + "SELECT id, status, ?, 'REPROCESS', ?, 'reprocess' FROM ocr.doc_job" + where, historyArgs.toArray());
+            jdbc.update("DELETE FROM ocr.doc_field WHERE doc_id IN (SELECT id FROM ocr.doc_job" + where + ")", args.toArray());
 
-            String reset = "UPDATE doc_job SET status = ?, failed_stage = NULL, retry_count = 0, next_retry_at = NULL, "
+            String reset = "UPDATE ocr.doc_job SET status = ?, failed_stage = NULL, retry_count = 0, next_retry_at = NULL, "
                     + "last_error = NULL, review_reasons = NULL, extracted_json = NULL, updated_at = CURRENT_TIMESTAMP";
             if (stage == Stage.CLASSIFY) {
                 // Re-classify from scratch unless the doc type came from the input folder.
@@ -97,7 +97,7 @@ public class RecoveryTasklet implements Tasklet {
             updateArgs.addAll(args);
             int count = jdbc.update(reset + where, updateArgs.toArray());
 
-            jdbc.update("UPDATE doc_reprocess_request SET state = 'APPLIED', applied_count = ?, applied_at = CURRENT_TIMESTAMP, "
+            jdbc.update("UPDATE ocr.doc_reprocess_request SET state = 'APPLIED', applied_count = ?, applied_at = CURRENT_TIMESTAMP, "
                     + "message = ? WHERE id = ?", count, count + " document(s) reset to " + target, requestId);
             log.info("Reprocess request #{}: {} document(s) reset to {} (from stage {})", requestId, count, target, stage);
         }
@@ -113,7 +113,7 @@ public class RecoveryTasklet implements Tasklet {
     }
 
     private void reject(long requestId, String message) {
-        jdbc.update("UPDATE doc_reprocess_request SET state = 'REJECTED', applied_at = CURRENT_TIMESTAMP, message = ? "
+        jdbc.update("UPDATE ocr.doc_reprocess_request SET state = 'REJECTED', applied_at = CURRENT_TIMESTAMP, message = ? "
                 + "WHERE id = ?", message, requestId);
         log.warn("Reprocess request #{} rejected: {}", requestId, message);
     }
@@ -122,15 +122,15 @@ public class RecoveryTasklet implements Tasklet {
 
     void scheduleRetries() {
         Timestamp now = Timestamp.from(Instant.now());
-        String due = " FROM doc_job WHERE status = 'ERROR' AND next_retry_at <= ? "
+        String due = " FROM ocr.doc_job WHERE status = 'ERROR' AND next_retry_at <= ? "
                 + "AND failed_stage IN ('CLASSIFY', 'EXTRACT', 'MAP')";
-        jdbc.update("INSERT INTO doc_status_history (doc_id, from_status, to_status, stage, note, changed_by) "
+        jdbc.update("INSERT INTO ocr.doc_status_history (doc_id, from_status, to_status, stage, note, changed_by) "
                 + "SELECT id, status, " + ENTRY_STATUS_CASE + ", 'RETRY', "
                 + "CONCAT('automatic retry after ', retry_count, ' failure(s) in ', failed_stage), 'retry'" + due, now);
-        int count = jdbc.update("UPDATE doc_job SET status = " + ENTRY_STATUS_CASE + ", next_retry_at = NULL, "
+        int count = jdbc.update("UPDATE ocr.doc_job SET status = " + ENTRY_STATUS_CASE + ", next_retry_at = NULL, "
                 + "updated_at = CURRENT_TIMESTAMP WHERE status = 'ERROR' AND next_retry_at <= ? "
                 + "AND failed_stage IN ('CLASSIFY', 'EXTRACT', 'MAP')", now);
-        Integer waiting = jdbc.queryForObject("SELECT COUNT(*) FROM doc_job WHERE status = 'ERROR'", Integer.class);
+        Integer waiting = jdbc.queryForObject("SELECT COUNT(*) FROM ocr.doc_job WHERE status = 'ERROR'", Integer.class);
         log.info("Retry: {} document(s) re-queued, {} still waiting for their retry time", count, waiting);
     }
 }

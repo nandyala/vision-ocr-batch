@@ -1,6 +1,8 @@
 # Data model, retries and reprocessing
 
-DDL: `src/main/resources/schema-app-sqlserver.sql` (production, SQL Server) and `schema-app-h2.sql` (demo, H2).
+DDL (SQL Server): `src/main/resources/schema-app-sqlserver.sql` (job tables) and `schema-batch-sqlserver.sql`
+(Spring Batch tables). Everything lives in the schema `ocr`; the scripts only create missing objects
+and never drop or alter anything, so they are safe to run in an existing database.
 Operator queries: `ops/operations.sql`.
 
 ## Tables
@@ -33,7 +35,7 @@ Operator queries: `ops/operations.sql`.
 | `doc_error` | Every failure: stage, attempt number, exception, HTTP status, retryable | writers, ingest |
 | `doc_reprocess_request` | Operator requests to push documents back into the pipeline | operators |
 | `v_doc_field_final` | What downstream systems read | view |
-| `v_doc_<doctype>` | Generated per doc type at each run (e.g. `v_doc_auto_pay_auth`): one row per document, one column per field listed in the doc type XML (`viewColumns` or `fields`) | viewStep |
+| `ocr.v_doc_<doctype>` | Generated per doc type at each run (e.g. `ocr.v_doc_auto_pay_auth`): one row per document, one column per field listed in the doc type XML (`viewColumns` or `fields`) | viewStep |
 
 ## Status lifecycle
 

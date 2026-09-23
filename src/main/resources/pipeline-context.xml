@@ -59,7 +59,7 @@
             <bean class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
                 <property name="dataSource" ref="dataSource"/>
                 <property name="selectClause" value="SELECT *"/>
-                <property name="fromClause" value="FROM doc_job"/>
+                <property name="fromClause" value="FROM ocr.doc_job"/>
                 <property name="whereClause"
                           value="status = 'NEW'"/>
                 <property name="sortKey" value="id"/>
@@ -72,7 +72,7 @@
             <bean class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
                 <property name="dataSource" ref="dataSource"/>
                 <property name="selectClause" value="SELECT *"/>
-                <property name="fromClause" value="FROM doc_job"/>
+                <property name="fromClause" value="FROM ocr.doc_job"/>
                 <property name="whereClause"
                           value="status = 'CLASSIFIED'"/>
                 <property name="sortKey" value="id"/>
@@ -85,7 +85,7 @@
             <bean class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
                 <property name="dataSource" ref="dataSource"/>
                 <property name="selectClause" value="SELECT *"/>
-                <property name="fromClause" value="FROM doc_job"/>
+                <property name="fromClause" value="FROM ocr.doc_job"/>
                 <property name="whereClause" value="status = 'EXTRACTED'"/>
                 <property name="sortKey" value="id"/>
             </bean>

@@ -19,7 +19,6 @@
         <azure-docintel.version>1.0.7</azure-docintel.version>
         <azure-identity.version>1.15.4</azure-identity.version>
         <jackson.version>2.18.2</jackson.version>
-        <h2.version>2.3.232</h2.version>
         <mssql.version>12.8.1.jre11</mssql.version>
         <hikari.version>6.2.1</hikari.version>
         <logback.version>1.5.16</logback.version>
@@ -54,12 +53,7 @@
             <version>${jackson.version}</version>
         </dependency>
 
-        <!-- Database: H2 for local/demo, Microsoft SQL Server for production -->
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <version>${h2.version}</version>
-        </dependency>
+        <!-- Database: Microsoft SQL Server -->
         <dependency>
             <groupId>com.microsoft.sqlserver</groupId>
             <artifactId>mssql-jdbc</artifactId>

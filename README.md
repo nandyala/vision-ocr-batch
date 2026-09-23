@@ -57,8 +57,8 @@ src/main/resources/
     auto-pay-auth.xml         ← one file per doc type
     _doctype-template.xml.example
   application.properties
-  schema-app-h2.sql           tables for the H2 demo database
-  schema-app-sqlserver.sql    the same tables for SQL Server (production):
+  schema-batch-sqlserver.sql  Spring Batch tables (ocr.BATCH_*)
+  schema-app-sqlserver.sql    job tables, all in schema ocr:
                               doc_job, doc_azure_result, doc_field, doc_field_correction,
                               doc_status_history, doc_error, doc_reprocess_request, v_doc_field_final
 src/main/java/com/visionocr/
@@ -77,7 +77,7 @@ ops/operations.sql            monitoring, reprocess, correction and housekeeping
 Requirements: **JDK 17+**, **Maven 3.9+**.
 
 ```bash
-mvn clean package              # runs unit + end-to-end tests (offline: synthetic data, stubbed Azure, in-memory H2)
+mvn clean package              # unit tests; the end-to-end test runs only with a test SQL Server (see below)
 
 ./run.sh                       # real Azure: set AZURE_DI_ENDPOINT, AZURE_DI_KEY (or managed identity),
                                #             AZURE_DI_CLASSIFIER_ID (optional)
@@ -90,36 +90,51 @@ java -jar target/vision-ocr-batch.jar job-context.xml docExtractionJob -next
 # override any property:  -Dbatch.commit-interval=10 -Dinput.dir=/mnt/scans -Dconfig.file=/etc/ocr/app.properties
 ```
 
-Look at the results (H2 console, or any SQL client on `./data/db/*.mv.db`):
+### Database (SQL Server)
 
-```sql
-SELECT id, file_name, doc_type, status, review_reasons, failed_stage, next_retry_at FROM doc_job ORDER BY id;
-SELECT field_name, field_value, confidence, field_status, message FROM doc_field WHERE doc_id = 1;
-SELECT stage, from_status, to_status, note FROM doc_status_history WHERE doc_id = 1 ORDER BY id;
-```
+The job uses Microsoft SQL Server (2016 SP1 or later, or Azure SQL Database), typically an **existing
+database shared with other applications**. It is designed not to interfere with anything already there:
 
-### Database: H2 for the demo, SQL Server for production
+* **Everything lives in its own schema `ocr`**: the job's tables (`ocr.doc_job`, `ocr.doc_field`, ...),
+  its views, and Spring Batch's own tables (`ocr.BATCH_*`, via `tablePrefix`). Nothing is created in `dbo`,
+  and other Spring Batch applications in the same database are not affected.
+* **Create-only scripts:** `schema-batch-sqlserver.sql` and `schema-app-sqlserver.sql` create the schema
+  and the objects that are missing, and never drop or alter existing objects. Errors are not ignored.
+* **The only DROP statement** is for the job's generated views `ocr.v_doc_<doctype>`, recreated on each run.
+  The code refuses any other view name.
+* Row deletes only happen in the job's own tables (`ocr.doc_field` when a document is re-mapped).
 
-H2 (a file in `data/db`) is the default, so the demo needs no database server. For SQL Server, put this in
-`application-local.properties` (or environment-specific config):
+Connection settings, in `application-local.properties` or environment variables (`DB_URL`, `DB_USER`,
+`DB_PASSWORD`):
 
 ```properties
-db.url=jdbc:sqlserver://<server>:1433;databaseName=visionocr;encrypt=true;trustServerCertificate=false
-db.driver=com.microsoft.sqlserver.jdbc.SQLServerDriver
-db.platform=sqlserver
+db.url=jdbc:sqlserver://<server>:1433;databaseName=<existing db>;encrypt=true;trustServerCertificate=false
 db.user=<sql login>
-db.password=<password>          # or env DB_PASSWORD
+db.password=<password>
+db.init=true     # create missing ocr.* objects at startup; false if the DBA has run the two scripts
 ```
 
-* `db.platform` selects the table scripts: `schema-app-h2.sql` or `schema-app-sqlserver.sql`, plus Spring
-  Batch's own `schema-<platform>.sql`. Both scripts are idempotent.
-* In production a DBA usually runs `src/main/resources/schema-app-sqlserver.sql` and
-  `org/springframework/batch/core/schema-sqlserver.sql` (inside the spring-batch-core jar) once; then set
-  `db.init=false`. The job's login then only needs read/write on the tables plus `CREATE VIEW` / `ALTER`
-  on the schema for the generated `v_doc_<doctype>` views.
-* SQL Server 2016 SP1 or later (or Azure SQL Database) is required (`CREATE OR ALTER`, `DROP ... IF EXISTS`,
-  JSON functions).
-* Keep the two schema scripts in sync when changing tables.
+**Permissions for the job's login:**
+
+* `db.init=true`: `CREATE SCHEMA` (first run only), plus `CREATE TABLE`, `CREATE VIEW` and `CREATE SEQUENCE`.
+* In production the DBA usually runs the two scripts once. Then set `db.init=false`. The login only needs:
+  * `SELECT, INSERT, UPDATE, DELETE` on schema `ocr`
+  * `CREATE VIEW` in the database, plus `ALTER` on schema `ocr`, for the generated per-doc-type views
+
+```sql
+-- run by the DBA, after the two scripts
+GRANT SELECT, INSERT, UPDATE, DELETE, ALTER ON SCHEMA::ocr TO <job_user>;
+GRANT CREATE VIEW TO <job_user>;
+```
+
+**End-to-end test:** it needs a SQL Server **test** database (never production):
+
+```bash
+mvn test -Dtest.db.url="jdbc:sqlserver://<host>:1433;databaseName=<test db>;encrypt=true;trustServerCertificate=true" \
+         -Dtest.db.user=<user> -Dtest.db.password=<password>
+```
+
+Without these settings it is skipped. The test uses unique file names per run, so it can be repeated.
 
 ## Run on Windows with IntelliJ IDEA
 
@@ -134,9 +149,8 @@ db.password=<password>          # or env DB_PASSWORD
 6. **Run:** pick a configuration in the top-right drop-down and press ▶:
    * **OCR Job - Azure:** the real job; reads `application-local.properties`
    Files to process go in `data\input\` (or `data\input\AUTO_PAY_AUTH\` to skip the classifier).
-7. **Look at the data:** *Database* tool window → *+ → Data Source → H2* →
-   URL `jdbc:h2:file:<project folder>/data/db/visionocr;AUTO_SERVER=TRUE`, user `sa`,
-   empty password. `AUTO_SERVER=TRUE` lets you keep it open while the job runs.
+7. **Look at the data:** in SQL Server Management Studio / Azure Data Studio, or IntelliJ Ultimate's
+   *Database* tool window (*+ → Data Source → Microsoft SQL Server*). The tables are in schema `ocr`.
 
 The run configurations live in `.run/` and appear in IntelliJ automatically. From a command prompt,
 `run.bat` does the same as `run.sh`.
@@ -149,28 +163,10 @@ The run configurations live in `.run/` and appear in IntelliJ automatically. Fro
 
 ## Viewing the extracted data
 
-Everything the job produces is stored in its database. With the default H2 settings that is the file
-`data/db/visionocr.mv.db` in the project folder.
-
-### Open the database
-
-**IntelliJ IDEA Ultimate** (Database tool window):
-
-1. *View → Tool Windows → Database* → **+** → *Data Source* → **H2**.
-2. Connection type **URL only**, URL (use your full project path, without `.mv.db`):
-   ```
-   jdbc:h2:file:C:/path/to/OCR/data/db/visionocr;AUTO_SERVER=TRUE
-   ```
-   User `sa`, empty password. Download the driver if IntelliJ asks → *Test Connection* → *OK*.
-
-**IntelliJ Community / no Database window:** start the H2 web console (the jar is already in your
-Maven repository), then paste the same URL, user `sa`, and click *Connect*:
-
-```powershell
-java -cp "$env:USERPROFILE\.m2\repository\com\h2database\h2\2.3.232\h2-2.3.232.jar" org.h2.tools.Console
-```
-
-DBeaver (free) works the same way. `AUTO_SERVER=TRUE` lets you keep the database open while the job runs.
+Everything the job produces is stored in schema `ocr` of the SQL Server database. Open it with
+SQL Server Management Studio, Azure Data Studio, or IntelliJ Ultimate's *Database* tool window
+(*+ → Data Source → Microsoft SQL Server*, same server/login as the job). More queries are in
+`ops/operations.sql`.
 
 ### Useful queries
 
@@ -178,7 +174,7 @@ Each document and its outcome:
 
 ```sql
 SELECT id, file_name, status, doc_type, model_id, doc_confidence, review_reasons, last_error
-FROM doc_job ORDER BY id;
+FROM ocr.doc_job ORDER BY id;
 ```
 
 Extracted fields of one document (`field_status` = OK | MISSING | LOW_CONFIDENCE | INVALID,
@@ -186,39 +182,39 @@ Extracted fields of one document (`field_status` = OK | MISSING | LOW_CONFIDENCE
 
 ```sql
 SELECT field_name, field_value, raw_value, confidence, field_status, message, configured
-FROM doc_field WHERE doc_id = 1 ORDER BY field_name;
+FROM ocr.doc_field WHERE doc_id = 1 ORDER BY field_name;
 ```
 
 All extracted values of every document as one JSON object (works for any doc type, no field names needed):
 
 ```sql
-SELECT id, file_name, doc_type, status, extracted_json FROM doc_job ORDER BY id;
+SELECT id, file_name, doc_type, status, extracted_json FROM ocr.doc_job ORDER BY id;
 ```
 
 One row per document with the fields as columns: the job generates a view per doc type at the start
-of every run, named `v_doc_<doctype>` (e.g. `v_doc_auto_pay_auth`). Its columns come from the doc type
+of every run, named `ocr.v_doc_<doctype>` (e.g. `ocr.v_doc_auto_pay_auth`). Its columns come from the doc type
 XML (`viewColumns`, or else the listed `fields`), so a new doc type or field needs no SQL. Values include
 reviewer corrections:
 
 ```sql
-SELECT * FROM v_doc_auto_pay_auth ORDER BY doc_id;
+SELECT * FROM ocr.v_doc_auto_pay_auth ORDER BY doc_id;
 ```
 
 Find documents by a field value (indexed):
 
 ```sql
-SELECT j.id, j.file_name, j.status FROM doc_field f JOIN doc_job j ON j.id = f.doc_id
+SELECT j.id, j.file_name, j.status FROM ocr.doc_field f JOIN ocr.doc_job j ON j.id = f.doc_id
 WHERE f.field_name = 'lenderAccountNumber' AND f.value_key = 'LN-4455667';
 ```
 
 On SQL Server you can also read the JSON directly:
-`SELECT JSON_VALUE(extracted_json, '$.routingNumber') FROM doc_job WHERE id = 1;`
+`SELECT JSON_VALUE(extracted_json, '$.routingNumber') FROM ocr.doc_job WHERE id = 1;`
 
 All fields of all documents as rows, with reviewer corrections applied (generic for every doc type):
 
 ```sql
 SELECT j.id, j.file_name, j.doc_type, f.field_name, f.final_value, f.value_source, f.confidence, f.field_status
-FROM doc_job j JOIN v_doc_field_final f ON f.doc_id = j.id
+FROM ocr.doc_job j JOIN ocr.v_doc_field_final f ON f.doc_id = j.id
 ORDER BY j.id, f.field_name;
 ```
 
@@ -227,14 +223,14 @@ the full Azure response is in `result_json`):
 
 ```sql
 SELECT id, model_id, doc_confidence, fields_json
-FROM doc_azure_result WHERE doc_id = 1 AND operation = 'EXTRACT' AND is_current = TRUE;
+FROM ocr.doc_azure_result WHERE doc_id = 1 AND operation = 'EXTRACT' AND is_current = 1;
 ```
 
 History and errors of one document:
 
 ```sql
-SELECT changed_at, stage, from_status, to_status, note FROM doc_status_history WHERE doc_id = 1 ORDER BY id;
-SELECT stage, attempt_no, http_status, error_message FROM doc_error WHERE doc_id = 1 ORDER BY id;
+SELECT changed_at, stage, from_status, to_status, note FROM ocr.doc_status_history WHERE doc_id = 1 ORDER BY id;
+SELECT stage, attempt_no, http_status, error_message FROM ocr.doc_error WHERE doc_id = 1 ORDER BY id;
 ```
 
 ### Fields showing MISSING?
@@ -244,7 +240,7 @@ Usually the field names in the Azure model differ from `azureField` in `doctypes
 documents without calling Azure again:
 
 ```sql
-INSERT INTO doc_reprocess_request (from_stage, doc_type, current_status, reason, requested_by)
+INSERT INTO ocr.doc_reprocess_request (from_stage, doc_type, current_status, reason, requested_by)
 VALUES ('MAP', 'AUTO_PAY_AUTH', 'REVIEW', 'field names aligned', 'me');
 ```
 
@@ -304,9 +300,8 @@ See `src/main/resources/application.properties`. Key settings:
   separate documents is a possible extension using the classifier's page ranges.
 * The Azure call runs inside the chunk transaction, so keep `batch.commit-interval` small (default 5).
   If the job crashes mid-chunk, those documents are sent to Azure again on the next run.
-* Local H2 databases created by an earlier version of this project must be deleted (`data/db`),
-  because the schema changed. For SQL Server, use a migration tool (Flyway/Liquibase) or DBA-managed
-  change scripts from here on, since `IF NOT EXISTS` scripts don't alter existing tables.
+* The schema scripts only create missing objects. Changes to existing tables need a migration
+  (Flyway/Liquibase or DBA-managed change scripts).
 * Build a review UI (or connect an existing work queue) on top of `doc_job` / `doc_field`, and feed
   corrections back as training data.
 * Auto-labelling helper: generate `.labels.json` for historical documents from their known values.

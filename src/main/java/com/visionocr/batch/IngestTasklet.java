@@ -65,7 +65,7 @@ public class IngestTasklet implements Tasklet {
         }
         for (Path file : files) {
             String hash = sha256(file);
-            Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM doc_job WHERE file_hash = ?", Integer.class, hash);
+            Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM ocr.doc_job WHERE file_hash = ?", Integer.class, hash);
             if (exists != null && exists > 0) {
                 skipped++;
                 continue;
@@ -74,15 +74,15 @@ public class IngestTasklet implements Tasklet {
             boolean badSize = size == 0 || size > maxBytes;
             DocStatus status = badSize ? DocStatus.FAILED : DocStatus.NEW;
             String error = badSize ? "INGEST: file size " + size + " bytes outside 1.." + maxBytes : null;
-            jdbc.update("INSERT INTO doc_job (file_path, file_name, file_hash, file_size, status, doc_type, "
+            jdbc.update("INSERT INTO ocr.doc_job (file_path, file_name, file_hash, file_size, status, doc_type, "
                             + "failed_stage, last_error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     file.toString(), file.getFileName().toString(), hash, size, status.name(), docTypeHint(file),
                     badSize ? "INGEST" : null, error);
-            Long id = jdbc.queryForObject("SELECT id FROM doc_job WHERE file_hash = ?", Long.class, hash);
-            jdbc.update("INSERT INTO doc_status_history (doc_id, from_status, to_status, stage, note) VALUES (?, ?, ?, ?, ?)",
+            Long id = jdbc.queryForObject("SELECT id FROM ocr.doc_job WHERE file_hash = ?", Long.class, hash);
+            jdbc.update("INSERT INTO ocr.doc_status_history (doc_id, from_status, to_status, stage, note) VALUES (?, ?, ?, ?, ?)",
                     id, null, status.name(), "INGEST", error);
             if (badSize) {
-                jdbc.update("INSERT INTO doc_error (doc_id, stage, attempt_no, error_class, error_message, retryable) "
+                jdbc.update("INSERT INTO ocr.doc_error (doc_id, stage, attempt_no, error_class, error_message, retryable) "
                         + "VALUES (?, 'INGEST', 1, 'InvalidFile', ?, ?)", id, error, false);
             }
             added++;

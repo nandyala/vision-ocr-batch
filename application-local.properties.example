@@ -23,12 +23,10 @@ input.dir=./data/input
 #input.dir=C:/scans/incoming
 
 
-# ---- Database ----
-# Leave commented out to use the local H2 demo database (data/db).
-# Production / shared: Microsoft SQL Server
-#db.url=jdbc:sqlserver://<server>:1433;databaseName=visionocr;encrypt=true;trustServerCertificate=false
-#db.driver=com.microsoft.sqlserver.jdbc.SQLServerDriver
-#db.platform=sqlserver
-#db.user=<sql login>
-#db.password=<password>
-#db.init=false
+# ---- Database (Microsoft SQL Server) ----
+# The job creates/uses only the schema "ocr" in this database; other schemas and tables are not touched.
+db.url=jdbc:sqlserver://<server>:1433;databaseName=<existing db>;encrypt=true;trustServerCertificate=false
+db.user=<sql login>
+db.password=<password>
+# true = create missing ocr.* objects at startup (create-only); false = DBA ran the scripts
+db.init=true

@@ -23,23 +23,26 @@
         <property name="dataSource" ref="dataSource"/>
     </bean>
 
-    <!-- Spring Batch metadata tables: scripts are not idempotent, so failures (table exists) are ignored. -->
-    <jdbc:initialize-database data-source="dataSource" enabled="${db.init}" ignore-failures="ALL">
-        <jdbc:script location="classpath:org/springframework/batch/core/schema-${db.platform}.sql"/>
-    </jdbc:initialize-database>
-    <!-- Application tables: idempotent script, real failures are reported. -->
+    <!-- Creates the job's objects in the dedicated schema "ocr" if they are missing.
+         Create-only scripts: nothing is dropped or altered, other schemas are never touched.
+         Failures are NOT ignored. Set db.init=false when a DBA has run the scripts. -->
     <jdbc:initialize-database data-source="dataSource" enabled="${db.init}">
-        <jdbc:script location="classpath:schema-app-${db.platform}.sql"/>
+        <jdbc:script location="classpath:schema-batch-sqlserver.sql"/>
+        <jdbc:script location="classpath:schema-app-sqlserver.sql"/>
     </jdbc:initialize-database>
 
+    <!-- Spring Batch metadata lives in ocr.BATCH_* (not dbo), so it cannot clash with other applications -->
     <bean id="jobRepository" class="org.springframework.batch.core.repository.support.JobRepositoryFactoryBean">
         <property name="dataSource" ref="dataSource"/>
         <property name="transactionManager" ref="transactionManager"/>
+        <property name="databaseType" value="SQLSERVER"/>
+        <property name="tablePrefix" value="ocr.BATCH_"/>
     </bean>
 
     <bean id="jobExplorer" class="org.springframework.batch.core.explore.support.JobExplorerFactoryBean">
         <property name="dataSource" ref="dataSource"/>
         <property name="transactionManager" ref="transactionManager"/>
+        <property name="tablePrefix" value="ocr.BATCH_"/>
     </bean>
 
     <bean id="jobLauncher" class="org.springframework.batch.core.launch.support.TaskExecutorJobLauncher">
