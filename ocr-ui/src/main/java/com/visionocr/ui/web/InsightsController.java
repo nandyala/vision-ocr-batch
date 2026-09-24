@@ -30,23 +30,23 @@ public class InsightsController {
     }
 
     @GetMapping("/overview")
-    public Map<String, Object> overview(@RequestParam(defaultValue = "14") int days) {
+    public Map<String, Object> overview(@RequestParam(name = "days", defaultValue = "14") int days) {
         return insights.overview(days);
     }
 
     @GetMapping("/insights/fields")
-    public List<Map<String, Object>> fieldQuality(@RequestParam(required = false) String docType) {
+    public List<Map<String, Object>> fieldQuality(@RequestParam(name = "docType", required = false) String docType) {
         return insights.fieldQuality(docType);
     }
 
     @GetMapping("/corrections")
-    public Map<String, Object> corrections(@RequestParam(required = false) String docType,
-                                           @RequestParam(required = false) String field,
-                                           @RequestParam(required = false) String reason,
-                                           @RequestParam(required = false) String user,
-                                           @RequestParam(defaultValue = "false") boolean includeInactive,
-                                           @RequestParam(defaultValue = "0") int page,
-                                           @RequestParam(defaultValue = "25") int size) {
+    public Map<String, Object> corrections(@RequestParam(name = "docType", required = false) String docType,
+                                           @RequestParam(name = "field", required = false) String field,
+                                           @RequestParam(name = "reason", required = false) String reason,
+                                           @RequestParam(name = "user", required = false) String user,
+                                           @RequestParam(name = "includeInactive", defaultValue = "false") boolean includeInactive,
+                                           @RequestParam(name = "page", defaultValue = "0") int page,
+                                           @RequestParam(name = "size", defaultValue = "25") int size) {
         return insights.corrections(docType, field, reason, user, includeInactive, page, size);
     }
 
@@ -56,7 +56,7 @@ public class InsightsController {
     }
 
     @GetMapping("/corrections/export")
-    public void correctionsCsv(@RequestParam(required = false) String docType, HttpServletResponse response) throws IOException {
+    public void correctionsCsv(@RequestParam(name = "docType", required = false) String docType, HttpServletResponse response) throws IOException {
         csv(response, "corrections-" + LocalDate.now() + ".csv");
         try (Writer w = response.getWriter()) {
             w.write('﻿');   // BOM so Excel opens UTF-8 correctly
@@ -70,16 +70,16 @@ public class InsightsController {
     }
 
     @GetMapping("/data/{docType}")
-    public Map<String, Object> grid(@PathVariable String docType,
-                                    @RequestParam(required = false) String status,
-                                    @RequestParam(required = false) String q,
-                                    @RequestParam(defaultValue = "0") int page,
-                                    @RequestParam(defaultValue = "50") int size) {
+    public Map<String, Object> grid(@PathVariable("docType") String docType,
+                                    @RequestParam(name = "status", required = false) String status,
+                                    @RequestParam(name = "q", required = false) String q,
+                                    @RequestParam(name = "page", defaultValue = "0") int page,
+                                    @RequestParam(name = "size", defaultValue = "50") int size) {
         return data.grid(docType, status, q, page, size);
     }
 
     @GetMapping("/data/{docType}/export")
-    public void gridCsv(@PathVariable String docType, HttpServletResponse response) throws IOException {
+    public void gridCsv(@PathVariable("docType") String docType, HttpServletResponse response) throws IOException {
         csv(response, docType.toLowerCase().replaceAll("[^a-z0-9_]", "_") + "-" + LocalDate.now() + ".csv");
         try (Writer w = response.getWriter()) {
             w.write('﻿');

@@ -43,36 +43,36 @@ public class DocumentController {
     }
 
     @GetMapping("/documents")
-    public Map<String, Object> search(@RequestParam(required = false) String status,
-                                      @RequestParam(required = false) String docType,
-                                      @RequestParam(required = false) String q,
-                                      @RequestParam(required = false) String from,
-                                      @RequestParam(required = false) String to,
-                                      @RequestParam(required = false) Boolean corrected,
-                                      @RequestParam(defaultValue = "id") String sort,
-                                      @RequestParam(defaultValue = "desc") String dir,
-                                      @RequestParam(defaultValue = "0") int page,
-                                      @RequestParam(defaultValue = "25") int size) {
+    public Map<String, Object> search(@RequestParam(name = "status", required = false) String status,
+                                      @RequestParam(name = "docType", required = false) String docType,
+                                      @RequestParam(name = "q", required = false) String q,
+                                      @RequestParam(name = "from", required = false) String from,
+                                      @RequestParam(name = "to", required = false) String to,
+                                      @RequestParam(name = "corrected", required = false) Boolean corrected,
+                                      @RequestParam(name = "sort", defaultValue = "id") String sort,
+                                      @RequestParam(name = "dir", defaultValue = "desc") String dir,
+                                      @RequestParam(name = "page", defaultValue = "0") int page,
+                                      @RequestParam(name = "size", defaultValue = "25") int size) {
         return documents.search(status, docType, q, from, to, corrected, sort, dir, page, size);
     }
 
     @GetMapping("/review-queue")
-    public List<Map<String, Object>> reviewQueue(@RequestParam(defaultValue = "200") int limit) {
+    public List<Map<String, Object>> reviewQueue(@RequestParam(name = "limit", defaultValue = "200") int limit) {
         return documents.reviewQueue(limit);
     }
 
     @GetMapping("/documents/{id}")
-    public Map<String, Object> detail(@PathVariable long id) {
+    public Map<String, Object> detail(@PathVariable("id") long id) {
         return documents.detail(id);
     }
 
     @GetMapping("/documents/{id}/pages")
-    public Map<String, Object> pages(@PathVariable long id) throws IOException {
+    public Map<String, Object> pages(@PathVariable("id") long id) throws IOException {
         return Map.of("pages", documents.pages(id));
     }
 
     @GetMapping("/documents/{id}/file")
-    public ResponseEntity<byte[]> file(@PathVariable long id, @RequestParam(defaultValue = "0") int page) throws IOException {
+    public ResponseEntity<byte[]> file(@PathVariable("id") long id, @RequestParam(name = "page", defaultValue = "0") int page) throws IOException {
         DocumentService.FileContent f = documents.file(id, page);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(f.contentType()))
@@ -82,46 +82,46 @@ public class DocumentController {
     }
 
     @GetMapping("/documents/{id}/azure/{resultId}")
-    public JsonNode azureResult(@PathVariable long id, @PathVariable long resultId,
-                                @RequestParam(defaultValue = "false") boolean full) {
+    public JsonNode azureResult(@PathVariable("id") long id, @PathVariable("resultId") long resultId,
+                                @RequestParam(name = "full", defaultValue = "false") boolean full) {
         return documents.azureResult(id, resultId, full);
     }
 
     @GetMapping("/documents/{id}/corrections")
-    public List<Map<String, Object>> correctionHistory(@PathVariable long id, @RequestParam String field) {
+    public List<Map<String, Object>> correctionHistory(@PathVariable("id") long id, @RequestParam(name = "field") String field) {
         return documents.correctionHistory(id, field);
     }
 
     @PostMapping("/documents/{id}/corrections")
-    public Map<String, Object> correct(@PathVariable long id, @RequestBody Map<String, String> body,
+    public Map<String, Object> correct(@PathVariable("id") long id, @RequestBody Map<String, String> body,
                                        @RequestHeader(value = Reviewer.HEADER, required = false) String user) {
         documents.correct(id, body.get("field"), body.get("value"), body.get("reason"), body.get("comment"), Reviewer.of(user));
         return documents.detail(id);
     }
 
     @PostMapping("/documents/{id}/corrections/revert")
-    public Map<String, Object> revert(@PathVariable long id, @RequestBody Map<String, String> body,
+    public Map<String, Object> revert(@PathVariable("id") long id, @RequestBody Map<String, String> body,
                                       @RequestHeader(value = Reviewer.HEADER, required = false) String user) {
         documents.revertCorrection(id, body.get("field"), Reviewer.of(user));
         return documents.detail(id);
     }
 
     @PostMapping("/documents/{id}/approve")
-    public Map<String, Object> approve(@PathVariable long id, @RequestBody(required = false) Map<String, String> body,
+    public Map<String, Object> approve(@PathVariable("id") long id, @RequestBody(required = false) Map<String, String> body,
                                        @RequestHeader(value = Reviewer.HEADER, required = false) String user) {
         documents.approve(id, body == null ? null : body.get("note"), Reviewer.of(user));
         return documents.detail(id);
     }
 
     @PostMapping("/documents/{id}/reopen")
-    public Map<String, Object> reopen(@PathVariable long id, @RequestBody(required = false) Map<String, String> body,
+    public Map<String, Object> reopen(@PathVariable("id") long id, @RequestBody(required = false) Map<String, String> body,
                                       @RequestHeader(value = Reviewer.HEADER, required = false) String user) {
         documents.reopen(id, body == null ? null : body.get("note"), Reviewer.of(user));
         return documents.detail(id);
     }
 
     @PostMapping("/documents/{id}/reprocess")
-    public Map<String, Object> reprocess(@PathVariable long id, @RequestBody Map<String, String> body,
+    public Map<String, Object> reprocess(@PathVariable("id") long id, @RequestBody Map<String, String> body,
                                          @RequestHeader(value = Reviewer.HEADER, required = false) String user) {
         documents.reprocess(id, body.get("fromStage"), body.get("reason"), Reviewer.of(user));
         jobTrigger.trigger();
@@ -131,7 +131,7 @@ public class DocumentController {
     /** Multipart upload of one or more files. docType = AUTO (classifier / default) or a doc type name. */
     @PostMapping(value = "/uploads", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Map<String, Object> upload(@RequestParam("files") List<MultipartFile> files,
-                                      @RequestParam(defaultValue = "AUTO") String docType) throws IOException {
+                                      @RequestParam(name = "docType", defaultValue = "AUTO") String docType) throws IOException {
         List<Map<String, Object>> results = new ArrayList<>();
         boolean any = false;
         for (MultipartFile f : files) {

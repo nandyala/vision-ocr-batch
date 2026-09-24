@@ -43,12 +43,12 @@ public class OperationsController {
     }
 
     @GetMapping("/jobs")
-    public List<Map<String, Object>> runs(@RequestParam(defaultValue = "25") int limit) {
+    public List<Map<String, Object>> runs(@RequestParam(name = "limit", defaultValue = "25") int limit) {
         return ops.jobRuns(limit);
     }
 
     @GetMapping("/jobs/{id}/steps")
-    public List<Map<String, Object>> steps(@PathVariable long id) {
+    public List<Map<String, Object>> steps(@PathVariable("id") long id) {
         return ops.jobSteps(id);
     }
 
@@ -67,12 +67,12 @@ public class OperationsController {
     }
 
     @GetMapping("/errors")
-    public Map<String, Object> errors(@RequestParam(defaultValue = "7") int days) {
+    public Map<String, Object> errors(@RequestParam(name = "days", defaultValue = "7") int days) {
         return ops.errors(days);
     }
 
     @GetMapping("/reprocess-requests")
-    public List<Map<String, Object>> reprocessRequests(@RequestParam(defaultValue = "50") int limit) {
+    public List<Map<String, Object>> reprocessRequests(@RequestParam(name = "limit", defaultValue = "50") int limit) {
         return ops.reprocessRequests(limit);
     }
 

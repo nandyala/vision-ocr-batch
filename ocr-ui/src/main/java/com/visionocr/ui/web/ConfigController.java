@@ -67,7 +67,7 @@ public class ConfigController {
     }
 
     @GetMapping("/config/doc-types/{docType}")
-    public Map<String, Object> docType(@PathVariable String docType) {
+    public Map<String, Object> docType(@PathVariable("docType") String docType) {
         return config.docType(docType);
     }
 
@@ -84,7 +84,7 @@ public class ConfigController {
     }
 
     @PutMapping("/config/doc-types/{docType}")
-    public Map<String, Object> update(@PathVariable String docType, @RequestBody DocTypeSpec spec,
+    public Map<String, Object> update(@PathVariable("docType") String docType, @RequestBody DocTypeSpec spec,
                                       @RequestHeader(value = Reviewer.HEADER, required = false) String user) throws IOException {
         if (spec.docType() == null || !spec.docType().equalsIgnoreCase(docType)) {
             throw new IllegalArgumentException("The doc type name cannot be changed");
@@ -103,7 +103,7 @@ public class ConfigController {
     }
 
     @GetMapping("/config/models/{modelId}/fields")
-    public Map<String, String> modelFields(@PathVariable String modelId) {
+    public Map<String, String> modelFields(@PathVariable("modelId") String modelId) {
         return config.modelFields(modelId);
     }
 
