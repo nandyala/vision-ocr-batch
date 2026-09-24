@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Map;
 
@@ -21,6 +22,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<Map<String, String>> notFound(NotFoundException e) {
         return error(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    /**
+     * A file that is not there (optional brand assets such as /brand/logo.svg, browser probes such as
+     * /.well-known/...). Normal - plain 404, no error log.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Void> noResource(NoResourceFoundException e) {
+        log.debug("Not found: {}", e.getResourcePath());
+        return ResponseEntity.notFound().build();
     }
 
     @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
