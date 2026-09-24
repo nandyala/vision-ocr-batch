@@ -45,7 +45,8 @@ The first doc type is `AUTO_PAY_AUTH` (Automatic Payment Authorization Agreement
 * **Status-driven:** every step reads documents by status. A crashed or stopped run is simply
   launched again and continues where it stopped. Nothing is processed twice.
 * **Parallel:** classify and extract send `batch.threads` documents to Azure at the same time
-  (documents split by `id % threads`). `batch.threads=1` processes one at a time.
+  (documents split by `id % threads`; only slices with waiting documents run, so one upload = one partition).
+  `batch.threads=1` processes one at a time.
 * **REVIEW** means a person should look at the document. `DOC_JOB.REVIEW_REASONS` says why, e.g.
   `INVALID:routingNumber:ROUTING_CHECKSUM_FAILED;MISSING:signature`.
 * **ERROR / FAILED:**

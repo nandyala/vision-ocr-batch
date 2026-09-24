@@ -102,7 +102,8 @@ crashes mid-chunk, those documents keep their previous status and are processed 
 
 ## Volume and retention
 
-* **Parallelism:** classify/extract run `batch.threads` partitions (`id % threads`); readers use `READPAST`
+* **Parallelism:** classify/extract run up to `batch.threads` partitions (`id % threads`, only slices that have
+  documents waiting); readers use `READPAST`
   so partitions never wait on each other's rows.
 * **Compression:** the full Azure response is stored with `COMPRESS()` (typically 5-10x smaller); the large
   tables (`doc_field`, `doc_status_history`, `doc_error`, `doc_azure_result`) use PAGE compression.

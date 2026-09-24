@@ -53,13 +53,13 @@
         <!-- Azure calls run in batch.threads parallel partitions (documents split by id % threads).
              batch.threads=1 processes one document at a time. -->
         <batch:step id="classifyStep" next="extractStep">
-            <batch:partition step="classifyWorkerStep" partitioner="modPartitioner">
+            <batch:partition step="classifyWorkerStep" partitioner="classifyPartitioner">
                 <batch:handler grid-size="${batch.threads}" task-executor="batchTaskExecutor"/>
             </batch:partition>
         </batch:step>
 
         <batch:step id="extractStep" next="mapValidateStep">
-            <batch:partition step="extractWorkerStep" partitioner="modPartitioner">
+            <batch:partition step="extractWorkerStep" partitioner="extractPartitioner">
                 <batch:handler grid-size="${batch.threads}" task-executor="batchTaskExecutor"/>
             </batch:partition>
         </batch:step>
@@ -96,7 +96,15 @@
         </batch:tasklet>
     </batch:step>
 
-    <bean id="modPartitioner" class="com.visionocr.batch.ModPartitioner"/>
+    <!-- Partitions only for id % batch.threads slices that have documents waiting in the step's input status -->
+    <bean id="classifyPartitioner" class="com.visionocr.batch.ModPartitioner">
+        <constructor-arg ref="jdbcTemplate"/>
+        <constructor-arg value="NEW"/>
+    </bean>
+    <bean id="extractPartitioner" class="com.visionocr.batch.ModPartitioner">
+        <constructor-arg ref="jdbcTemplate"/>
+        <constructor-arg value="CLASSIFIED"/>
+    </bean>
 
     <bean id="runIdIncrementer" class="org.springframework.batch.core.launch.support.RunIdIncrementer"/>
 </beans>
