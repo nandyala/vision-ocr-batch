@@ -4,6 +4,7 @@ export const state = {
   user: load('reviewer') || '',
   meta: { docTypes: [], extensions: ['pdf', 'tif', 'tiff', 'jpg', 'jpeg', 'png'], maxFileMb: 500 },
   job: { running: false },
+  dbClockSkewMs: 0,       // database clock minus app clock (see OperationsService.dbClockSkewMs)
   reviewCount: 0
 };
 
@@ -34,7 +35,7 @@ export async function api(path, opts = {}) {
   }
   let res;
   try {
-    res = await fetch(path, { method: opts.method || 'GET', headers, body });
+    res = await fetch(path, { method: opts.method || 'GET', headers, body, cache: 'no-store' });
   } catch (e) {
     throw new Error('The server cannot be reached. Is the demo app running?');
   }
@@ -53,13 +54,21 @@ export function humanize(name) {
     .replace(/\baba\b/g, 'ABA').replace(/\bid\b/g, 'ID').replace(/\bach\b/g, 'ACH').replace(/\bssn\b/g, 'SSN');
 }
 export function docTypeLabel(t) { return t ? humanize(t) : 'Not classified'; }
-export function toDate(v) {
+/**
+ * Parses a timestamp. Document times (ocr.doc_*) come from the database clock; when SQL Server runs in another
+ * time zone than the app, they are corrected by state.dbClockSkewMs. raw = true for app-clock times
+ * (job runner, Spring Batch run records).
+ */
+export function toDate(v, raw) {
   if (v == null || v === '') return null;
   const d = new Date(typeof v === 'string' && /^\d{4}-\d\d-\d\d \d/.test(v) ? v.replace(' ', 'T') : v);
-  return isNaN(d.getTime()) ? null : d;
+  if (isNaN(d.getTime())) return null;
+  return raw || !state.dbClockSkewMs ? d : new Date(d.getTime() - state.dbClockSkewMs);
 }
-export function fmtDate(v, withYear) {
-  const d = toDate(v);
+/** File name as uploaded: without the "yyyyMMdd-HHmmss-" prefix the upload adds for uniqueness. */
+export function displayName(n) { return String(n == null ? '' : n).replace(/^\d{8}-\d{6}-/, ''); }
+export function fmtDate(v, withYear, raw) {
+  const d = toDate(v, raw);
   if (!d) return '–';
   return d.toLocaleString(undefined, Object.assign({ month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }, withYear ? { year: 'numeric' } : {}));
 }
@@ -67,23 +76,25 @@ export function fmtDay(v) {
   const d = toDate(v);
   return d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '–';
 }
-export function ago(v) {
-  const d = toDate(v);
+export function ago(v, raw) {
+  const d = toDate(v, raw);
   if (!d) return '';
-  const s = Math.round((Date.now() - d.getTime()) / 1000);
-  if (s < 45) return 'just now';
-  if (s < 3600) return Math.round(s / 60) + ' min ago';
-  if (s < 86400) return Math.round(s / 3600) + ' h ago';
-  if (s < 86400 * 7) return Math.round(s / 86400) + ' d ago';
-  return fmtDate(v);
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + ' min ago';
+  if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+  if (s < 86400 * 7) return Math.floor(s / 86400) + ' d ago';
+  return fmtDate(v, false, raw);
 }
+/** Changes every minute - pages add it to their "did anything change?" check so "x min ago" stays current. */
+export function minuteTick() { return Math.floor(Date.now() / 60000); }
 export function pct(v, digits) {
   if (v == null || isNaN(v)) return '–';
   return (Number(v) * 100).toFixed(digits || 0) + '%';
 }
 export function num(v) { return v == null ? '–' : Number(v).toLocaleString(); }
 export function duration(ms) {
-  if (ms == null) return '–';
+  if (ms == null || ms < 0) return '–';
   const s = ms / 1000;
   if (s < 1) return Math.round(ms) + ' ms';
   if (s < 60) return s.toFixed(s < 10 ? 1 : 0) + ' s';

@@ -48,8 +48,17 @@ async function render() {
   try {
     const mod = await import('./pages/' + route.page + '.js');
     if (seq !== routeSeq) return;
+    // each page gets its own container: a page that finishes loading after the user already moved on
+    // writes into a detached element and never over the new page
+    const host = document.createElement('div');
     main.innerHTML = '';
-    current = (await mod.mount(main, { params, query, go })) || {};
+    main.appendChild(host);
+    const page = (await mod.mount(host, { params, query, go })) || {};
+    if (seq !== routeSeq) {
+      if (page.unmount) { try { page.unmount(); } catch (e) { /* ignore */ } }
+      return;
+    }
+    current = page;
   } catch (e) {
     if (seq !== routeSeq) return;
     console.error(e);
@@ -77,7 +86,7 @@ function renderJob() {
   let text = 'Pipeline ready';
   if (j.running) text = 'Processing' + (j.currentStep ? ' · ' + stepLabel(j.currentStep) : '…');
   else if (j.lastStatus === 'FAILED') text = 'Last run failed';
-  else if (j.lastEnd) text = 'Last run ' + ago(j.lastEnd);
+  else if (j.lastEnd) text = 'Last run ' + ago(j.lastEnd, true);
   $('.job-pill__text', el).textContent = text;
   el.title = j.lastError || 'Batch job status - click for operations';
 }
@@ -110,6 +119,7 @@ async function tick() {
     const [job, queue] = await Promise.all([api('/api/job'), api('/api/review-queue?limit=500')]);
     const wasRunning = state.job.running;
     state.job = job;
+    if (typeof job.dbClockSkewMs === 'number') state.dbClockSkewMs = job.dbClockSkewMs;
     state.reviewCount = queue.length;
     renderJob();
     const b = $('#review-count');
@@ -163,6 +173,10 @@ async function start() {
   }
   window.addEventListener('hashchange', render);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+  try {   // clock correction must be known before the first page shows any time
+    state.job = await api('/api/job');
+    if (typeof state.job.dbClockSkewMs === 'number') state.dbClockSkewMs = state.job.dbClockSkewMs;
+  } catch (e) { /* shown by tick() */ }
   await render();
   tick();
   setInterval(tick, 3000);

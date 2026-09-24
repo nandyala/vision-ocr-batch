@@ -58,6 +58,8 @@ public class InsightsService {
                 + "FROM ocr.doc_job WHERE created_at >= DATEADD(DAY, ?, CAST(SYSDATETIME() AS DATE)) "
                 + "GROUP BY CONVERT(VARCHAR(10), created_at, 23), status ORDER BY day", -(d - 1)));
         m.put("days", d);
+        // "today" as the database sees it - the day buckets above use the database clock
+        m.put("dbToday", jdbc.queryForObject("SELECT CONVERT(VARCHAR(10), SYSDATETIME(), 23)", String.class));
         m.put("byDocType", jdbc.queryForList("SELECT COALESCE(doc_type, '') AS doc_type, COUNT(*) AS total, "
                 + "SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed, "
                 + "SUM(CASE WHEN status = 'REVIEW' THEN 1 ELSE 0 END) AS review, "

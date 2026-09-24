@@ -28,19 +28,20 @@ public class OperationsService {
     public List<Map<String, Object>> jobRuns(int limit) {
         return jdbc.queryForList("SELECT TOP (?) e.JOB_EXECUTION_ID AS id, e.STATUS AS status, e.EXIT_CODE AS exit_code, "
                 + "e.EXIT_MESSAGE AS exit_message, e.CREATE_TIME AS created_at, e.START_TIME AS start_time, e.END_TIME AS end_time, "
-                + "DATEDIFF(MILLISECOND, e.START_TIME, COALESCE(e.END_TIME, SYSDATETIME())) AS duration_ms, "
+                // Spring Batch writes its times with the application's clock, so "now" must come from there too
+                + "DATEDIFF(MILLISECOND, e.START_TIME, COALESCE(e.END_TIME, ?)) AS duration_ms, "
                 + "(SELECT SUM(s.WRITE_COUNT) FROM ocr.BATCH_STEP_EXECUTION s WHERE s.JOB_EXECUTION_ID = e.JOB_EXECUTION_ID "
                 + " AND s.STEP_NAME = 'mapValidateStep') AS documents_mapped "
-                + "FROM ocr.BATCH_JOB_EXECUTION e ORDER BY e.JOB_EXECUTION_ID DESC", Math.max(1, Math.min(limit, 200)));
+                + "FROM ocr.BATCH_JOB_EXECUTION e ORDER BY e.JOB_EXECUTION_ID DESC", Math.max(1, Math.min(limit, 200)), appNow());
     }
 
     public List<Map<String, Object>> jobSteps(long executionId) {
         return jdbc.queryForList("SELECT STEP_EXECUTION_ID AS id, STEP_NAME AS step_name, STATUS AS status, "
                 + "READ_COUNT AS read_count, WRITE_COUNT AS write_count, FILTER_COUNT AS filter_count, "
                 + "COMMIT_COUNT AS commit_count, ROLLBACK_COUNT AS rollback_count, START_TIME AS start_time, END_TIME AS end_time, "
-                + "DATEDIFF(MILLISECOND, START_TIME, COALESCE(END_TIME, SYSDATETIME())) AS duration_ms, EXIT_CODE AS exit_code, "
+                + "DATEDIFF(MILLISECOND, START_TIME, COALESCE(END_TIME, ?)) AS duration_ms, EXIT_CODE AS exit_code, "
                 + "LEFT(EXIT_MESSAGE, 2000) AS exit_message "
-                + "FROM ocr.BATCH_STEP_EXECUTION WHERE JOB_EXECUTION_ID = ? ORDER BY STEP_EXECUTION_ID", executionId);
+                + "FROM ocr.BATCH_STEP_EXECUTION WHERE JOB_EXECUTION_ID = ? ORDER BY STEP_EXECUTION_ID", appNow(), executionId);
     }
 
     /** Name of the step the latest unfinished run is executing (for the live indicator), or null. */
@@ -95,6 +96,9 @@ public class OperationsService {
         if (docId == null && docType == null && currentStatus == null && failedStage == null) {
             throw new IllegalArgumentException("Choose at least one filter (document, doc type, status or failed stage)");
         }
+        if (docId != null && jdbc.queryForObject("SELECT COUNT(*) FROM ocr.doc_job WHERE id = ?", Integer.class, docId) == 0) {
+            throw new IllegalArgumentException("Document #" + docId + " does not exist");
+        }
         if (docType != null && !registry.contains(docType)) {
             throw new IllegalArgumentException("Unknown doc type " + docType);
         }
@@ -122,6 +126,22 @@ public class OperationsService {
     /** Makes every ERROR document due now instead of waiting for its back-off. */
     public int retryNow() {
         return jdbc.update("UPDATE ocr.doc_job SET next_retry_at = SYSDATETIME() WHERE status = 'ERROR'");
+    }
+
+    /**
+     * Difference between the database clock (SYSDATETIME, used for all ocr.doc_* times) and this application's clock,
+     * rounded to 15 minutes. Non-zero when SQL Server runs in another time zone (e.g. Azure SQL = UTC); the UI uses it
+     * to show document times correctly.
+     */
+    public long dbClockSkewMs() {
+        java.sql.Timestamp db = jdbc.queryForObject("SELECT SYSDATETIME()", java.sql.Timestamp.class);
+        long diff = db == null ? 0 : db.getTime() - System.currentTimeMillis();
+        long q = 15 * 60 * 1000L;
+        return Math.round((double) diff / q) * q;
+    }
+
+    private static java.sql.Timestamp appNow() {
+        return new java.sql.Timestamp(System.currentTimeMillis());
     }
 
     private static void filter(StringBuilder where, List<Object> args, String column, Object value) {

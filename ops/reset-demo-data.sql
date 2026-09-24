@@ -4,7 +4,8 @@
 -- Deletes every row in the job's tables in schema ocr, including Spring Batch run history,
 -- and restarts the id counters at 1. Tables, views, indexes and anything outside schema ocr
 -- are NOT touched. Input files are not touched either: files still in the input folder are
--- processed again on the next run.
+-- processed again on the next run - so ALSO run ops/reset-demo-files.bat (Windows) or
+-- ops/reset-demo-files.sh, which moves them to data/archive/<timestamp>/.
 --
 -- SAFETY:
 --   1. Set @confirm_database below to the name of the database you mean to reset.

@@ -89,6 +89,7 @@ brand/                        logo + fonts.css for the UI (TD Graphik is used wh
 scripts/azure-train.sh        train model/classifier via REST
 ops/operations.sql            monitoring, reprocess, correction and housekeeping queries
 ops/reset-demo-data.sql       deletes ALL job data in schema ocr (demos/test only; asks for the db name)
+ops/reset-demo-files.bat|.sh  demo reset part 2: moves the input folder's files to data/archive/ (else they are re-ingested)
 ```
 
 ## Build and run

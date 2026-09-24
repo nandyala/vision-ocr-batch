@@ -1,4 +1,4 @@
-import { api, esc, icon, kpi, pct, num, humanize, docTypeLabel, badge, ago, duration, pageHead, empty, state, STAGES } from '../core.js';
+import { api, esc, icon, kpi, pct, num, humanize, docTypeLabel, badge, ago, duration, pageHead, empty, state, STAGES, displayName, minuteTick } from '../core.js';
 import { stackedBars, donut, hbars } from '../charts.js';
 
 export async function mount(el) {
@@ -12,7 +12,7 @@ export async function mount(el) {
 
   async function load() {
     const d = await api('/api/overview?days=14');
-    const key = JSON.stringify(d);
+    const key = JSON.stringify(d) + minuteTick();
     if (key === lastKey) return;
     lastKey = key;
     box.innerHTML = render(d);
@@ -45,7 +45,8 @@ function render(d) {
 
   // daily volume
   const days = [];
-  const today = new Date();
+  // day buckets come from the database clock - count back from the database's "today"
+  const today = d.dbToday ? new Date(d.dbToday + 'T12:00:00') : new Date();
   for (let i = d.days - 1; i >= 0; i--) {
     const x = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
     const key = x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
@@ -79,14 +80,26 @@ function render(d) {
   // confidence + flagged fields + doc types
   const buckets = Array.from({ length: 10 }, (_, i) => ({ label: (i * 10) + '%', values: { n: 0 } }));
   (d.confidence || []).forEach(r => { if (buckets[r.bucket]) buckets[r.bucket].values.n = r.cnt; });
-  const conf = stackedBars(buckets.slice(3), [{ key: 'n', label: 'Documents', color: 'var(--g-600)' }], { legend: false, width: 360, height: 210, label: 'Confidence distribution' });
-  const flagged = (d.flaggedFields || []);
+  const firstUsed = buckets.findIndex(b => b.values.n > 0);
+  const conf = stackedBars(buckets.slice(Math.max(0, Math.min(3, firstUsed < 0 ? 3 : firstUsed))), [{ key: 'n', label: 'Documents', color: 'var(--g-600)' }], { legend: false, width: 360, height: 210, label: 'Confidence distribution' });
+  // one bar per field (the API returns one row per field and reason); the reasons go into the tooltip
+  const byField = new Map();
+  (d.flaggedFields || []).forEach(f => {
+    const g = byField.get(f.field_name) || { field_name: f.field_name, cnt: 0, parts: [], invalid: 0 };
+    g.cnt += f.cnt; g.parts.push(f.cnt + ' ' + (statusWordOf(f.field_status)));
+    if (f.field_status === 'INVALID') g.invalid += f.cnt;
+    byField.set(f.field_name, g);
+  });
+  const flagged = Array.from(byField.values()).sort((x, y) => y.cnt - x.cnt).slice(0, 6);
   const statusWord = { MISSING: 'missing', LOW_CONFIDENCE: 'low confidence', INVALID: 'failed check' };
   h += '<div class="grid grid--3" style="margin-bottom:20px">' +
     '<section class="card"><div class="card__head"><h2>Model confidence</h2><span class="muted small">documents per score</span></div><div class="card__body">' + conf + '</div></section>' +
     '<section class="card"><div class="card__head"><h2>Most flagged fields</h2><a class="muted small" href="#/insights">Details →</a></div><div class="card__body">' +
-    (flagged.length ? hbars(flagged.map(f => ({ label: esc(humanize(f.field_name)) + ' <span class="muted small">' + esc(statusWord[f.field_status] || f.field_status) + '</span>',
-      value: f.cnt, tone: f.field_status === 'INVALID' ? 'danger' : 'warn' }))) : '<p class="muted">No field was flagged. Every value passed the rules.</p>') +
+    (flagged.length ? hbars(flagged.map(f => ({ label: esc(humanize(f.field_name)), title: f.parts.join(', '),
+      value: f.cnt, tone: f.invalid * 2 > f.cnt ? 'danger' : 'warn' }))) +
+      '<div class="legend"><span class="legend__item"><span class="legend__swatch" style="background:var(--warn-solid)"></span>mostly low confidence / missing</span>' +
+      '<span class="legend__item"><span class="legend__swatch" style="background:var(--danger)"></span>mostly failed checks</span></div>'
+      : '<p class="muted">No field was flagged. Every value passed the rules.</p>') +
     '</div></section>' +
     '<section class="card"><div class="card__head"><h2>By document type</h2></div><div class="card__body card__body--flush"><table class="table table--compact"><thead><tr><th>Type</th><th class="num">Docs</th><th class="num">Review</th><th class="num">Avg conf.</th></tr></thead><tbody>' +
     (d.byDocType || []).map(t => '<tr class="is-clickable" data-href="' + (t.doc_type ? '#/data/' + encodeURIComponent(t.doc_type) : '#/documents?docType=NONE') + '"><td>' + (t.doc_type ? esc(docTypeLabel(t.doc_type)) : '<span class="muted">Not classified</span>') +
@@ -101,7 +114,7 @@ function render(d) {
 
 function activity(a) {
   let ic = 'check', tone = '', title;
-  const file = '<a href="#/documents/' + a.doc_id + '">' + esc(a.file_name) + '</a>';
+  const file = '<a href="#/documents/' + a.doc_id + '">' + esc(displayName(a.file_name)) + '</a>';
   if (a.stage === 'REVIEW' && a.to_status === 'COMPLETED') { ic = 'shield'; title = esc(a.changed_by || 'Reviewer') + ' approved ' + file; }
   else if (a.stage === 'REVIEW' && a.from_status === a.to_status) { ic = 'edit'; tone = 'info'; title = esc(a.changed_by || 'Reviewer') + ': ' + esc(noteText(a.note) || 'updated') + ' on ' + file; }
   else if (a.to_status === 'REVIEW') { ic = 'review'; tone = 'warn'; title = file + ' needs review'; }
@@ -119,3 +132,5 @@ function activity(a) {
 export function noteText(note) {
   return String(note || '').replace(/^(Corrected|Confirmed|Correction of) ([A-Za-z0-9_.\[\]]+)/, (m, verb, f) => verb + ' ' + humanize(f).toLowerCase());
 }
+
+function statusWordOf(st) { return ({ MISSING: 'missing', LOW_CONFIDENCE: 'low confidence', INVALID: 'failed check' })[st] || st; }

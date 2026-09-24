@@ -7,7 +7,7 @@ import { esc, num } from './core.js';
 export function stackedBars(data, series, opts = {}) {
   const W = opts.width || 640, H = opts.height || 220, padL = 34, padB = 26, padT = 10, padR = 8;
   const totals = data.map(d => series.reduce((s, x) => s + (d.values[x.key] || 0), 0));
-  const max = niceMax(Math.max(1, ...totals));
+  const { max, step: tick } = niceScale(Math.max(1, ...totals));
   const iw = W - padL - padR, ih = H - padT - padB;
   const bw = Math.min(38, iw / Math.max(1, data.length) * 0.62);
   const step = iw / Math.max(1, data.length);
@@ -15,7 +15,7 @@ export function stackedBars(data, series, opts = {}) {
   for (let i = 0; i <= 4; i++) {
     const y = padT + ih - ih * i / 4;
     s += '<line class="grid-line" x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y + '" y2="' + y + '"/>' +
-      '<text x="' + (padL - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + num(Math.round(max * i / 4)) + '</text>';
+      '<text x="' + (padL - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + num(tick * i) + '</text>';
   }
   data.forEach((d, i) => {
     const x = padL + step * i + (step - bw) / 2;
@@ -72,8 +72,11 @@ export function hbars(rows, max) {
     esc(r.display != null ? r.display : num(r.value)) + '</span></div>').join('');
 }
 
-function niceMax(v) {
-  const p = Math.pow(10, Math.floor(Math.log10(v)));
-  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return Math.max(4, m * p);
-  return v;
+/** Four grid steps of a whole, round size (1, 2, 3, 5, 10, 25, 50...) so axis labels are evenly spaced integers. */
+function niceScale(v) {
+  const raw = Math.max(1, Math.ceil(v / 4));
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  let step = 10 * p;
+  for (const m of [1, 2, 2.5, 3, 4, 5, 6, 8, 10]) { if (m * p >= raw && Number.isInteger(m * p)) { step = m * p; break; } }
+  return { max: step * 4, step };
 }

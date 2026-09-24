@@ -95,30 +95,43 @@ export async function mount(el) {
     list.innerHTML = uploads.map(item).join('');
   }
 
+  /**
+   * Refreshes every stored upload from the server by content hash - also finished ones, so the list never points at
+   * documents that no longer exist (e.g. after the demo data was reset, when document ids start again at 1).
+   */
   async function poll() {
-    const open = uploads.filter(u => !['COMPLETED', 'REVIEW', 'FAILED'].includes(u.status));
-    if (!open.length) return;
+    if (!uploads.length) { renderList(); return; }
     try {
-      const rows = await api('/api/uploads/status', { method: 'POST', body: { hashes: open.map(u => u.hash) } });
+      const rows = await api('/api/uploads/status', { method: 'POST', body: { hashes: uploads.map(u => u.hash) } });
+      const byHash = new Map(rows.map(r => [r.file_hash, r]));
       let changed = false;
-      rows.forEach(r => {
-        const u = uploads.find(x => x.hash === r.file_hash);
-        if (!u) return;
-        if (u.status !== r.status || u.docId !== r.id) {
+      uploads = uploads.filter(u => {
+        if (byHash.has(u.hash)) return true;
+        // not (yet) known to the server: keep fresh uploads that the job has not picked up yet
+        const keep = !u.docId && Date.now() - new Date(u.at).getTime() < 15 * 60 * 1000;
+        if (!keep) changed = true;
+        return keep;
+      });
+      uploads.forEach(u => {
+        const r = byHash.get(u.hash);
+        if (!r) return;
+        if (u.status !== r.status || u.docId !== r.id || u.confidence !== r.doc_confidence) {
           const finishedNow = !['COMPLETED', 'REVIEW', 'FAILED'].includes(u.status) && ['COMPLETED', 'REVIEW', 'FAILED'].includes(r.status);
           Object.assign(u, { status: r.status, docId: r.id, docType: r.doc_type || u.docType, confidence: r.doc_confidence });
           changed = true;
-          if (finishedNow) {
+          if (finishedNow && reconciled) {
             const msg = r.status === 'COMPLETED' ? u.name + ' completed automatically' : r.status === 'REVIEW' ? u.name + ' needs a quick review' : u.name + ' failed';
             toast(msg, r.status === 'FAILED' ? 'error' : 'ok', { href: '#/documents/' + r.id, text: 'Open' });
           }
         }
       });
-      if (changed) { persist(); renderList(); }
+      if (changed) persist();
+      if (changed || !reconciled) { reconciled = true; renderList(); }
     } catch (e) { /* retry next tick */ }
   }
 
-  renderList();
+  let reconciled = false;   // the list is shown only after it was checked against the server
+  list.innerHTML = '<li><div class="skeleton" style="height:56px;margin:16px 20px"></div></li>';
   poll();
   return { tick: poll };
 }
@@ -153,7 +166,7 @@ function item(u) {
   return '<li class="upload-item fade-in"><span class="upload-item__icon">' + esc(ext) + '</span><div style="min-width:0">' +
     '<div class="upload-item__name ellipsis">' + esc(u.name) + '</div>' +
     '<div class="upload-item__meta">' + esc(u.docType && u.docType !== 'AUTO' ? docTypeLabel(u.docType) : 'Auto-detect') + (u.size ? ' · ' + bytes(u.size) : '') +
-    ' · ' + esc(ago(u.at)) + (u.confidence != null ? ' · confidence ' + pct(u.confidence) : '') + (u.docId ? ' · #' + u.docId : '') + (u.existing ? ' · already processed earlier' : '') + '</div>' +
+    ' · ' + esc(ago(u.at, true)) + (u.confidence != null ? ' · confidence ' + pct(u.confidence) : '') + (u.docId ? ' · #' + u.docId : '') + (u.existing ? ' · already processed earlier' : '') + '</div>' +
     '<div class="mini-steps">' + bars + '</div><div class="mini-labels">' + STEPS.map(s => '<span>' + s + '</span>').join('') + '</div></div>' +
     '<div class="row" style="justify-content:flex-end">' + right + '</div></li>';
 }

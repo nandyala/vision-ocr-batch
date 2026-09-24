@@ -1,4 +1,4 @@
-import { api, state, esc, icon, pageHead, badge, meter, ago, fmtDate, docTypeLabel, pager, empty, qs, skeletonRows, num, STATUS } from '../core.js';
+import { api, state, esc, icon, pageHead, badge, meter, ago, fmtDate, docTypeLabel, pager, empty, qs, skeletonRows, num, displayName, minuteTick } from '../core.js';
 
 const STATUS_FILTERS = [
   { id: '', label: 'All' },
@@ -40,7 +40,7 @@ export async function mount(el, ctx) {
     '<div class="table-wrap" id="tbl">' + skeletonRows(8) + '</div><div id="pg"></div></section>';
 
   const tbl = el.querySelector('#tbl');
-  let key = '';
+  let key = '', seq = 0;
 
   function sync() {
     const q = qs({ status: f.status, docType: f.docType, q: f.q, from: f.from, to: f.to, corrected: f.corrected ? 'true' : '', sort: f.sort !== 'id' ? f.sort : '', dir: f.dir !== 'desc' ? f.dir : '', page: f.page || '' });
@@ -48,9 +48,12 @@ export async function mount(el, ctx) {
   }
 
   async function load(force) {
+    const my = ++seq;      // a slower, older response (e.g. a poll with the old filters) must not win
     const data = await api('/api/documents' + qs({ status: f.status, docType: f.docType, q: f.q, from: f.from, to: f.to, corrected: f.corrected ? 'true' : '', sort: f.sort, dir: f.dir, page: f.page, size: 25 }));
-    const k = JSON.stringify(data);
+    if (my !== seq) return;
+    const k = JSON.stringify(data) + minuteTick();
     if (!force && k === key) return;
+    const scroll = { top: tbl.scrollTop, left: tbl.scrollLeft };
     key = k;
     el.querySelector('#count').textContent = num(data.total) + ' document' + (data.total === 1 ? '' : 's');
     if (!data.items.length) {
@@ -64,7 +67,7 @@ export async function mount(el, ctx) {
       : '<th>' + esc(c.label) + '</th>').join('') + '</tr></thead><tbody>' +
       data.items.map(d => '<tr class="is-clickable" data-href="#/documents/' + d.id + '" tabindex="0">' +
         '<td class="muted">#' + d.id + '</td>' +
-        '<td class="file"><div class="ellipsis" title="' + esc(d.file_name) + '">' + esc(d.file_name) + '</div></td>' +
+        '<td class="file"><div class="ellipsis" title="' + esc(d.file_name) + '">' + esc(displayName(d.file_name)) + '</div></td>' +
         '<td>' + (d.doc_type ? '<span class="tag tag--green">' + esc(docTypeLabel(d.doc_type)) + '</span>' : '<span class="muted">–</span>') + '</td>' +
         '<td>' + badge(d.status) + '</td>' +
         '<td>' + meter(d.doc_confidence) + '</td>' +
@@ -72,6 +75,7 @@ export async function mount(el, ctx) {
         '<td class="nowrap" title="' + esc(fmtDate(d.created_at, true)) + '">' + esc(fmtDate(d.created_at)) + '</td>' +
         '<td class="nowrap muted">' + esc(ago(d.updated_at)) + '</td></tr>').join('') + '</tbody></table>';
     el.querySelector('#pg').innerHTML = pager(data.total, data.page, data.size);
+    if (!force) { tbl.scrollTop = scroll.top; tbl.scrollLeft = scroll.left; }
   }
 
   function reload() { f.page = 0; sync(); load(true).catch(e => { tbl.innerHTML = '<div class="banner banner--danger" style="margin:16px">' + esc(e.message) + '</div>'; }); }

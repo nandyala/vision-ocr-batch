@@ -1,4 +1,4 @@
-import { api, state, esc, icon, pageHead, kpi, pct, num, humanize, docTypeLabel, fmtDate, reasonLabel, pager, qs, empty, isSensitive, mask, REASONS } from '../core.js';
+import { api, state, esc, icon, pageHead, kpi, pct, num, humanize, docTypeLabel, fmtDate, reasonLabel, pager, qs, empty, isSensitive, mask, REASONS, displayName } from '../core.js';
 import { donut, hbars } from '../charts.js';
 
 const REASON_COLORS = { OCR_MISREAD: '#008a00', WRONG_REGION: '#1f5fa8', MISSING: '#e3a008', FORMAT: '#6b4fbb', OTHER: '#8c8c8c', CONFIRMED: '#54b848' };
@@ -25,7 +25,8 @@ export async function mount(el) {
     const [ov, stats] = await Promise.all([api('/api/overview?days=14'), api('/api/corrections/stats')]);
     const k = ov.kpis;
     const acc = k.fieldsExtracted ? 1 - k.corrections / k.fieldsExtracted : null;
-    const segs = (stats.byReason || []).map(r => ({ label: reasonLabel(r.reason), value: r.cnt, color: REASON_COLORS[r.reason] || '#8c8c8c' }));
+    // confirmations are not corrections (they have their own KPI), so the donut total matches the Corrections KPI
+    const segs = (stats.byReason || []).filter(r => r.reason !== 'CONFIRMED').map(r => ({ label: reasonLabel(r.reason), value: r.cnt, color: REASON_COLORS[r.reason] || '#8c8c8c' }));
     el.querySelector('#top').innerHTML = '<div class="kpis">' +
       kpi({ label: 'Field accuracy', value: acc == null ? '–' : (acc * 100).toFixed(1), unit: acc == null ? '' : '%', iconName: 'target', tone: 'violet', hint: num(k.fieldsExtracted) + ' fields extracted' }) +
       kpi({ label: 'Corrections', value: num(k.corrections), iconName: 'edit', tone: 'info', hint: 'Values fixed by reviewers' }) +
@@ -68,7 +69,7 @@ export async function mount(el) {
       d.items.map(c => {
         const s = isSensitive(c.field_name);
         return '<tr class="is-clickable" data-href="#/documents/' + c.doc_id + '"><td class="nowrap">' + esc(fmtDate(c.corrected_at)) + '</td>' +
-          '<td><span class="muted">#' + c.doc_id + '</span> ' + esc(c.file_name) + '</td><td>' + esc(humanize(c.field_name)) + '</td>' +
+          '<td><span class="muted">#' + c.doc_id + '</span> ' + esc(displayName(c.file_name)) + '</td><td>' + esc(humanize(c.field_name)) + '</td>' +
           '<td class="mono small"><s style="color:var(--danger)">' + esc(s ? mask(c.original_value) : (c.original_value || '–')) + '</s></td>' +
           '<td class="mono small" style="color:var(--g-800);font-weight:600">' + esc(s ? mask(c.corrected_value) : (c.corrected_value || '–')) + '</td>' +
           '<td><span class="tag" style="background:' + (REASON_COLORS[c.reason] || '#888') + '1f;color:' + (REASON_COLORS[c.reason] || '#555') + '">' + esc(reasonLabel(c.reason)) + '</span>' +

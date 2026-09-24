@@ -1,12 +1,15 @@
 import {
   api, state, esc, icon, badge, ring, meter, pct, humanize, docTypeLabel, fmtDate, ago, duration, bytes, toast, dialog,
-  ensureReviewer, reasonItems, reasonLabel, isSensitive, mask, abaValid, jsonHtml, PROCESSING, STAGES, REASONS, STATUS, empty
+  ensureReviewer, reasonItems, reasonLabel, isSensitive, mask, abaValid, jsonHtml, PROCESSING, STAGES, REASONS, STATUS, empty,
+  displayName
 } from '../core.js';
 
 export async function mount(el, ctx) {
   const id = Number(ctx.params.id);
   const inQueue = ctx.query.queue === '1';
-  const S = { detail: null, key: '', tab: 'fields', editing: null, revealed: new Set(), page: 0, pages: 1, zoom: false, azure: null, queue: [] };
+  const S = { detail: null, key: '', tab: 'fields', editing: null, revealed: new Set(), page: 0, pages: 1, zoom: false, azure: null, queue: [],
+    version: 0,    // bumped by every load and action: an older response arriving later is ignored
+    busy: false }; // an action is running - further clicks are ignored (no double corrections/approvals)
 
   el.innerHTML = '<div id="d-head"></div><div id="d-steps"></div><div id="d-banner"></div>' +
     '<div class="workspace"><section class="card viewer" id="d-viewer"></section><section class="card panel" id="d-panel">' +
@@ -16,17 +19,24 @@ export async function mount(el, ctx) {
 
   // ---------------------------------------------------------------- data
   async function load(force) {
+    if (S.busy && !force) return;
+    const my = ++S.version;
     const d = await api('/api/documents/' + id);
-    const k = JSON.stringify(d);
+    const queue = inQueue ? await api('/api/review-queue?limit=500').catch(() => S.queue) : S.queue;
+    if (my !== S.version) return;          // an action or a newer load happened meanwhile
+    const k = JSON.stringify(d) + JSON.stringify(queue.map(q => q.id));
     if (!force && k === S.key) return;
-    const first = !S.detail;
-    S.detail = d; S.key = k;
-    if (first && ['tif', 'tiff'].includes(d.document.file_type) && d.document.file_available) {
-      api('/api/documents/' + id + '/pages').then(r => { S.pages = r.pages || 1; renderViewer(); }).catch(() => {});
+    // a different file behind the same id (e.g. demo data reset while this page was open): new preview
+    const fileChanged = !S.detail || S.detail.document.file_hash !== d.document.file_hash;
+    S.detail = d; S.key = k; S.queue = queue;
+    if (fileChanged) {
+      S.page = 0; S.pages = 1; S.zoom = false;
+      if (['tif', 'tiff'].includes(d.document.file_type) && d.document.file_available) {
+        api('/api/documents/' + id + '/pages').then(r => { S.pages = r.pages || 1; renderViewer(); }).catch(() => {});
+      }
+      renderViewer();
     }
-    if (inQueue) S.queue = await api('/api/review-queue?limit=500').catch(() => []);
     renderHead(); renderSteps(); renderBanner();
-    if (first) renderViewer();
     if (!S.editing || force) renderPanel();
   }
 
@@ -37,7 +47,7 @@ export async function mount(el, ctx) {
     const prev = qi > 0 ? S.queue[qi - 1] : null, next = qi >= 0 && qi < S.queue.length - 1 ? S.queue[qi + 1] : null;
     $h.innerHTML = '<div class="crumbs">' + (inQueue ? '<a href="#/review">Review queue</a>' : '<a href="#/documents">Documents</a>') +
       ' <span>/</span> <span>#' + doc.id + '</span></div>' +
-      '<div class="doc-head"><h1 class="doc-head__title" title="' + esc(doc.file_name) + '">' + esc(doc.file_name) + '</h1>' +
+      '<div class="doc-head"><h1 class="doc-head__title" title="' + esc(doc.file_name) + '">' + esc(displayName(doc.file_name)) + '</h1>' +
       '<div class="doc-head__meta">' + (doc.doc_type ? '<span class="tag tag--green" title="' + esc(S.detail.docTypeDescription || '') + '">' + esc(docTypeLabel(doc.doc_type)) + '</span>' : '') +
       badge(doc.status, PROCESSING.includes(doc.status) ? 'badge--pulse' : '') + ring(doc.doc_confidence) + '</div>' +
       (inQueue && qi >= 0 ? '<div class="doc-head__nav"><span class="queue-progress">' + (qi + 1) + ' of ' + S.queue.length + ' in queue</span>' +
@@ -310,14 +320,26 @@ export async function mount(el, ctx) {
   }
 
   // ---------------------------------------------------------------- actions
-  async function act(path, body, okMsg) {
+  async function act(path, body, okMsg, after) {
+    if (S.busy) return null;
+    S.busy = true;
+    S.version++;                            // any poll already under way is now outdated
+    $p.querySelectorAll('button').forEach(b => { b.disabled = true; });
     try {
       const d = await api('/api/documents/' + id + '/' + path, { method: 'POST', body: body || {} });
-      S.detail = d; S.key = JSON.stringify(d); S.editing = null;
+      S.version++;
+      S.detail = d; S.key = ''; S.editing = null;   // key reset: the next poll refreshes the queue position too
+      if (after) after(d);
       renderHead(); renderSteps(); renderBanner(); renderPanel();
       if (okMsg) toast(okMsg, 'ok');
       return d;
-    } catch (e) { toast(e.message, 'error'); return null; }
+    } catch (e) {
+      toast(e.message, 'error');
+      renderPanel();                        // re-enables the buttons
+      return null;
+    } finally {
+      S.busy = false;
+    }
   }
 
   $p.addEventListener('click', async e => {
@@ -425,7 +447,7 @@ export async function mount(el, ctx) {
       body: '<p>' + text + '</p><p class="small muted">Reviewer corrections are kept and still override the new model values.</p>' +
         '<label class="field-label">Reason <span class="hint">optional</span><input class="input" name="reason" maxlength="300"></label>' });
     if (!r) return;
-    if (await act('reprocess', { fromStage: stage, reason: r.reason || null }, 'Queued - processing starts now')) S.tab = 'fields';
+    await act('reprocess', { fromStage: stage, reason: r.reason || null }, 'Queued - processing starts now', () => { S.tab = 'fields'; S.azure = null; });
   }
 
   document.addEventListener('job-finished', onJobFinished);

@@ -33,6 +33,7 @@ public class OperationsController {
     public Map<String, Object> job() {
         Map<String, Object> m = new LinkedHashMap<>(jobTrigger.state());
         m.put("currentStep", jobTrigger.isRunning() ? ops.currentStep() : null);
+        m.put("dbClockSkewMs", ops.dbClockSkewMs());
         return m;
     }
 

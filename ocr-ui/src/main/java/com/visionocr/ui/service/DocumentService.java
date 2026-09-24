@@ -151,11 +151,15 @@ public class DocumentService {
 
     /** Document ids and file names for the review queue, oldest first (so reviewers work first-in first-out). */
     public List<Map<String, Object>> reviewQueue(int limit) {
+        // ordered by when the document ENTERED review (corrections update updated_at and must not reorder the queue)
         return jdbc.queryForList("SELECT TOP (?) j.id, j.file_name, j.doc_type, j.doc_confidence, j.review_reasons, "
-                + "j.created_at, j.updated_at, "
+                + "j.created_at, j.updated_at, COALESCE(w.since, j.updated_at) AS waiting_since, "
                 + "(SELECT COUNT(*) FROM ocr.doc_field f WHERE f.doc_id = j.id AND f.field_status <> 'OK') AS flagged_fields, "
-                + "(SELECT COUNT(*) FROM ocr.doc_field_correction c WHERE c.doc_id = j.id AND c.active = 1) AS corrections "
-                + "FROM ocr.doc_job j WHERE j.status = 'REVIEW' ORDER BY j.updated_at, j.id", Math.max(1, Math.min(limit, 500)));
+                + "(SELECT COUNT(*) FROM ocr.doc_field_correction c WHERE c.doc_id = j.id AND c.active = 1 "
+                + " AND c.reason <> 'CONFIRMED') AS corrections "
+                + "FROM ocr.doc_job j OUTER APPLY (SELECT MAX(h.changed_at) AS since FROM ocr.doc_status_history h "
+                + " WHERE h.doc_id = j.id AND h.to_status = 'REVIEW' AND (h.from_status IS NULL OR h.from_status <> 'REVIEW')) w "
+                + "WHERE j.status = 'REVIEW' ORDER BY COALESCE(w.since, j.updated_at), j.id", Math.max(1, Math.min(limit, 500)));
     }
 
     // ------------------------------------------------------------------ detail
@@ -300,7 +304,8 @@ public class DocumentService {
             if (!"COMPLETED".equals(status)) {
                 throw new IllegalArgumentException("Only completed documents can be sent back to review (current status " + status + ")");
             }
-            String reason = "MANUAL_REVIEW:" + (note == null || note.isBlank() ? "sent back by " + user : trim(note, 500));
+            // ';' separates review reasons - keep the note as one reason
+            String reason = "MANUAL_REVIEW:" + (note == null || note.isBlank() ? "sent back by " + user : trim(note.replace(';', ','), 500));
             history(id, status, "REVIEW", "REVIEW", "Sent back to review" + (note == null || note.isBlank() ? "" : " - " + trim(note, 1900)), user);
             jdbc.update("UPDATE ocr.doc_job SET status = 'REVIEW', review_reasons = ?, updated_at = SYSDATETIME() WHERE id = ?",
                     reason, id);

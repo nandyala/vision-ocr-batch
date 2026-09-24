@@ -1,4 +1,4 @@
-import { api, esc, icon, pageHead, empty, pct, ago, docTypeLabel, reasonItems, meter, num } from '../core.js';
+import { api, esc, icon, pageHead, empty, pct, ago, docTypeLabel, reasonItems, meter, num, displayName, minuteTick } from '../core.js';
 
 export async function mount(el) {
   el.innerHTML = pageHead('Review queue',
@@ -10,7 +10,7 @@ export async function mount(el) {
 
   async function load() {
     items = await api('/api/review-queue?limit=500');
-    const k = JSON.stringify(items);
+    const k = JSON.stringify(items) + minuteTick();
     if (k === key) return;
     key = k;
     el.querySelector('#start').disabled = !items.length;
@@ -21,13 +21,13 @@ export async function mount(el) {
     }
     const oldest = items[0];
     box.innerHTML = '<div class="card__head"><h2>' + num(items.length) + ' document' + (items.length > 1 ? 's' : '') + ' waiting</h2>' +
-      '<span class="muted small">oldest waiting since ' + esc(ago(oldest.updated_at)) + '</span></div><ul class="queue">' +
+      '<span class="muted small">oldest in review for ' + esc(since(oldest.waiting_since)) + '</span></div><ul class="queue">' +
       items.map((d, i) => {
         const reasons = reasonItems(d.review_reasons, []);
         return '<li class="queue-item" data-href="#/documents/' + d.id + '?queue=1" tabindex="0">' +
           '<span class="queue-item__pos">' + (i + 1) + '</span><div style="min-width:0">' +
-          '<div class="queue-item__title ellipsis">' + esc(d.file_name) + ' <span class="muted small">#' + d.id + '</span></div>' +
-          '<div class="muted small">' + esc(docTypeLabel(d.doc_type)) + ' · waiting ' + esc(ago(d.updated_at)) +
+          '<div class="queue-item__title ellipsis">' + esc(displayName(d.file_name)) + ' <span class="muted small">#' + d.id + '</span></div>' +
+          '<div class="muted small">' + esc(docTypeLabel(d.doc_type)) + ' · in review for ' + esc(since(d.waiting_since)) +
           (d.flagged_fields ? ' · ' + d.flagged_fields + ' flagged field' + (d.flagged_fields > 1 ? 's' : '') : '') +
           (d.corrections ? ' · ' + d.corrections + ' already corrected' : '') + '</div>' +
           '<div class="queue-item__reasons">' + reasons.slice(0, 5).map(r => '<span class="badge badge--warning badge--plain">' + esc(r.short) + '</span>').join('') +
@@ -39,4 +39,10 @@ export async function mount(el) {
   el.querySelector('#start').addEventListener('click', () => { if (items.length) location.hash = '#/documents/' + items[0].id + '?queue=1'; });
   await load().catch(e => { box.innerHTML = '<div class="banner banner--danger">' + esc(e.message) + '</div>'; });
   return { tick: () => load().catch(() => {}) };
+}
+
+/** "5 min ago" -> "5 min"; dates older than a week stay as a date. */
+function since(v) {
+  const a = ago(v);
+  return a === 'just now' ? 'less than a minute' : a.replace(/ ago$/, '');
 }

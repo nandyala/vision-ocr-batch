@@ -1,4 +1,4 @@
-import { api, esc, icon, pageHead, empty, pager, qs, docTypeLabel, humanize, badge, num, pct, isSensitive, mask, skeletonRows, ago } from '../core.js';
+import { api, esc, icon, pageHead, empty, pager, qs, docTypeLabel, humanize, badge, num, pct, isSensitive, mask, skeletonRows, ago, displayName, minuteTick } from '../core.js';
 
 export async function mount(el, ctx) {
   const types = await api('/api/data');
@@ -22,13 +22,16 @@ export async function mount(el, ctx) {
   const grid = el.querySelector('#grid');
   if (!docType) { grid.innerHTML = empty('No data yet', 'Upload documents first.', 'grid'); return {}; }
   el.querySelector('#status').value = f.status;
-  let key = '';
+  let key = '', seq = 0;
 
   async function load(force) {
     el.querySelector('#export').href = '/api/data/' + encodeURIComponent(docType) + '/export';
+    const my = ++seq;      // ignore responses that arrive after a newer request
     const d = await api('/api/data/' + encodeURIComponent(docType) + qs({ q: f.q, status: f.status, page: f.page, size: 50 }));
-    const k = JSON.stringify(d) + f.reveal;
+    if (my !== seq) return;
+    const k = JSON.stringify(d) + f.reveal + minuteTick();
     if (!force && k === key) return;
+    const scroll = { top: grid.scrollTop, left: grid.scrollLeft };
     key = k;
     el.querySelector('#hint').innerHTML = 'SQL: <code>' + esc(d.sqlView) + '</code>' + (d.sqlViewExists ? '' : ' (created at the next job run)');
     if (!d.rows.length) {
@@ -39,11 +42,12 @@ export async function mount(el, ctx) {
     grid.innerHTML = '<table class="table datagrid"><thead><tr><th class="sticky">Document</th><th>Status</th>' +
       d.columns.map(c => '<th class="' + (c.configured ? '' : 'is-extra') + '" title="' + esc(c.configured ? 'Configured field' : 'Returned by the model, not configured in the doc type') + '">' + esc(humanize(c.name)) + '</th>').join('') +
       '<th>Confidence</th><th>Updated</th></tr></thead><tbody>' +
-      d.rows.map(r => '<tr class="is-clickable" data-href="#/documents/' + r.doc_id + '"><td class="sticky"><b>#' + r.doc_id + '</b> <span class="muted">' + esc(r.file_name) + '</span></td>' +
+      d.rows.map(r => '<tr class="is-clickable" data-href="#/documents/' + r.doc_id + '"><td class="sticky"><b>#' + r.doc_id + '</b> <span class="muted" title="' + esc(r.file_name) + '">' + esc(displayName(r.file_name)) + '</span></td>' +
         '<td>' + badge(r.status) + '</td>' +
         d.columns.map(c => cell(r.values[c.name] || findCi(r.values, c.name), c.name)).join('') +
         '<td>' + pct(r.doc_confidence) + '</td><td class="muted">' + esc(ago(r.updated_at)) + '</td></tr>').join('') + '</tbody></table>';
     el.querySelector('#pg').innerHTML = pager(d.total, d.page, d.size);
+    if (!force) { grid.scrollTop = scroll.top; grid.scrollLeft = scroll.left; }
   }
 
   function cell(v, name) {
