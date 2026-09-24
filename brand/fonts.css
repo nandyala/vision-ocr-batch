@@ -1,0 +1,7 @@
+/* Uses TD Graphik when it is installed on this computer (no font files needed).
+   If the brand team gives you web font files, add them after local(), e.g.
+     src: local("TD Graphik"), url("/brand/TDGraphik-Regular.woff2") format("woff2"); */
+@font-face { font-family: "TD Graphik"; font-weight: 400; src: local("TD Graphik"), local("TD Graphik Regular"), local("TDGraphik-Regular"); }
+@font-face { font-family: "TD Graphik"; font-weight: 500; src: local("TD Graphik Medium"), local("TDGraphik-Medium"); }
+@font-face { font-family: "TD Graphik"; font-weight: 600; src: local("TD Graphik Semibold"), local("TDGraphik-Semibold"), local("TD Graphik Medium"); }
+@font-face { font-family: "TD Graphik"; font-weight: 700; src: local("TD Graphik Bold"), local("TDGraphik-Bold"), local("TD Graphik Semibold"); }

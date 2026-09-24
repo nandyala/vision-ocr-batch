@@ -85,7 +85,7 @@ ocr-ui/                       DEMO WEB APP (Spring Boot 3.5)
   src/main/resources/application.yml  UI settings (port, brand folder, ...)
   src/main/resources/static/          single-page app (no build step): index.html, css/, js/
 doctypes/                     doc types created in the UI's designer (loaded by the job and the UI)
-brand/                        (not in git) logo + licensed fonts for the UI
+brand/                        logo + fonts.css for the UI (TD Graphik is used when installed)
 scripts/azure-train.sh        train model/classifier via REST
 ops/operations.sql            monitoring, reprocess, correction and housekeeping queries
 ops/reset-demo-data.sql       deletes ALL job data in schema ocr (demos/test only; asks for the db name)
@@ -223,19 +223,17 @@ shows every version.
 
 ### TD look and feel (brand assets)
 
-The UI uses TD's public brand greens (`ocr-ui/src/main/resources/static/css/theme.css`). The **TD logo and
-the TD Graphik typeface are licensed brand assets and are not in this repository.** Get them from your
-brand / marketing team and put them in the local folder `brand/` (git-ignored, setting `ui.brand-dir`):
+The UI uses TD's public brand greens (`ocr-ui/src/main/resources/static/css/theme.css`) and the brand
+files in `brand/` (setting `ui.brand-dir`):
 
 ```
-brand/logo.svg          (or logo.png) - shown in the header
-brand/fonts.css         @font-face rules, e.g.
-                          @font-face { font-family: "TD Graphik"; font-weight: 400; src: url("/brand/TDGraphik-Regular.woff2") format("woff2"); }
-brand/*.woff2           the font files referenced by fonts.css
+brand/logo.png          TD logo shown in the header (a brand/logo.svg, if added, is used first)
+brand/fonts.css         uses TD Graphik when it is installed on the computer
 ```
 
-If TD Graphik is installed on the computer, it is used even without `fonts.css`.
-Without these files the UI shows a neutral icon and Segoe UI / system fonts.
+The TD Graphik font files are licensed and are not in the repository. If the brand team provides web
+font files, put them in `brand/` and add `url("/brand/<file>.woff2")` entries to `fonts.css`.
+Without the font the UI uses Segoe UI / system fonts.
 
 ### Security (demo)
 
