@@ -33,7 +33,7 @@
                     <property name="azureField" value="CustomerName"/>
                     <property name="canonicalField" value="customerName"/>
                     <property name="required" value="true"/>
-                    <property name="minConfidence" value="0.80"/>
+                    <property name="minConfidence" value="0.65"/>  <!-- demo; was 0.80 -->
                     <property name="normalizers">
                         <list><ref bean="norm.whitespace"/><ref bean="norm.upper"/></list>
                     </property>
@@ -43,7 +43,7 @@
                     <property name="azureField" value="LenderAccountNumber"/>
                     <property name="canonicalField" value="lenderAccountNumber"/>
                     <property name="required" value="true"/>
-                    <property name="minConfidence" value="0.85"/>
+                    <property name="minConfidence" value="0.65"/>  <!-- demo; was 0.85 -->
                     <property name="normalizers">
                         <list><ref bean="norm.whitespace"/><ref bean="apa.stripSpaces"/></list>
                     </property>
@@ -56,7 +56,7 @@
                     <property name="azureField" value="BuyerAddress"/>
                     <property name="canonicalField" value="buyerAddress"/>
                     <property name="required" value="false"/>
-                    <property name="minConfidence" value="0.70"/>
+                    <property name="minConfidence" value="0.65"/>  <!-- demo; was 0.70 -->
                     <property name="normalizers">
                         <list><ref bean="norm.whitespace"/><ref bean="norm.upper"/></list>
                     </property>
@@ -66,7 +66,7 @@
                     <property name="azureField" value="BankAccountHolderName"/>
                     <property name="canonicalField" value="bankAccountHolderName"/>
                     <property name="required" value="true"/>
-                    <property name="minConfidence" value="0.80"/>
+                    <property name="minConfidence" value="0.65"/>  <!-- demo; was 0.80 -->
                     <property name="normalizers">
                         <list><ref bean="norm.whitespace"/><ref bean="norm.upper"/></list>
                     </property>
@@ -76,7 +76,7 @@
                     <property name="azureField" value="BankName"/>
                     <property name="canonicalField" value="bankName"/>
                     <property name="required" value="true"/>
-                    <property name="minConfidence" value="0.75"/>
+                    <property name="minConfidence" value="0.65"/>  <!-- demo; was 0.75 -->
                     <property name="normalizers">
                         <list><ref bean="norm.whitespace"/><ref bean="norm.upper"/></list>
                     </property>
@@ -86,7 +86,7 @@
                     <property name="azureField" value="RoutingNumber"/>
                     <property name="canonicalField" value="routingNumber"/>
                     <property name="required" value="true"/>
-                    <property name="minConfidence" value="0.90"/>
+                    <property name="minConfidence" value="0.65"/>  <!-- demo; was 0.90 -->
                     <property name="normalizers">
                         <list><ref bean="norm.digits"/></list>
                     </property>
@@ -99,7 +99,7 @@
                     <property name="azureField" value="CheckingAccountNumber"/>
                     <property name="canonicalField" value="checkingAccountNumber"/>
                     <property name="required" value="true"/>
-                    <property name="minConfidence" value="0.90"/>
+                    <property name="minConfidence" value="0.65"/>  <!-- demo; was 0.90 -->
                     <property name="normalizers">
                         <list><ref bean="norm.digits"/></list>
                     </property>
