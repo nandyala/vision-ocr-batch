@@ -106,15 +106,17 @@ export async function mount(el, ctx) {
   // ---------------------------------------------------------------- viewer
   function renderViewer() {
     const doc = S.detail.document;
+    // the content hash in the URL makes every file a different URL, so the browser can never show a stale file
     const base = '/api/documents/' + id + '/file';
+    const v = 'v=' + encodeURIComponent(String(doc.file_hash || doc.updated_at || Date.now()).slice(0, 16));
     let bar, body;
     if (!doc.file_available) {
       bar = '<span>Original document</span>';
       body = empty('Preview not available', 'The original file is no longer in the input folder on this machine.', 'file');
     } else if (doc.file_type === 'pdf') {
       bar = '<span>' + icon('file', 16) + ' PDF · ' + esc(bytes(doc.file_size)) + '</span><span class="spacer"></span>' +
-        '<a class="btn btn--ghost btn--sm" href="' + base + '" target="_blank" rel="noopener">' + icon('external', 15) + 'Open</a>';
-      body = '<iframe class="viewer__frame" title="Original document" src="' + base + '#view=FitH"></iframe>';
+        '<a class="btn btn--ghost btn--sm" href="' + base + '?' + v + '" target="_blank" rel="noopener">' + icon('external', 15) + 'Open</a>';
+      body = '<iframe class="viewer__frame" title="Original document" src="' + base + '?' + v + '#view=FitH"></iframe>';
     } else {
       const multi = S.pages > 1;
       bar = '<span>' + icon('file', 16) + ' ' + esc(String(doc.file_type).toUpperCase()) + ' · ' + esc(bytes(doc.file_size)) + (multi ? ' · page ' + (S.page + 1) + ' of ' + S.pages : '') + '</span>' +
@@ -122,7 +124,7 @@ export async function mount(el, ctx) {
         (multi ? '<button class="icon-btn" data-v="page" data-d="-1" aria-label="Previous page"' + (S.page === 0 ? ' disabled' : '') + '>' + icon('arrowL') + '</button>' +
           '<button class="icon-btn" data-v="page" data-d="1" aria-label="Next page"' + (S.page >= S.pages - 1 ? ' disabled' : '') + '>' + icon('arrowR') + '</button>' : '') +
         '<button class="btn btn--ghost btn--sm" data-v="zoom" type="button">' + icon('zoom', 15) + (S.zoom ? 'Fit' : 'Zoom') + '</button>';
-      body = '<img class="viewer__img' + (S.zoom ? ' is-zoomed' : '') + '" data-v="zoom" style="cursor:' + (S.zoom ? 'zoom-out' : 'zoom-in') + '" alt="Page ' + (S.page + 1) + ' of the original document" src="' + base + '?page=' + S.page + '">';
+      body = '<img class="viewer__img' + (S.zoom ? ' is-zoomed' : '') + '" data-v="zoom" style="cursor:' + (S.zoom ? 'zoom-out' : 'zoom-in') + '" alt="Page ' + (S.page + 1) + ' of the original document" src="' + base + '?page=' + S.page + '&' + v + '">';
     }
     $v.innerHTML = '<div class="viewer__bar">' + bar + '</div><div class="viewer__body">' + body + '</div>';
   }

@@ -161,7 +161,7 @@ public class DocumentService {
     // ------------------------------------------------------------------ detail
 
     public Map<String, Object> detail(long id) {
-        List<Map<String, Object>> rows = jdbc.queryForList("SELECT id, file_name, file_path, file_size, doc_type, status, "
+        List<Map<String, Object>> rows = jdbc.queryForList("SELECT id, file_name, file_path, file_hash, file_size, doc_type, status, "
                 + "classifier_label, classify_confidence, pages, model_id, doc_confidence, review_reasons, failed_stage, "
                 + "retry_count, next_retry_at, last_error, extracted_json, created_at, updated_at FROM ocr.doc_job WHERE id = ?", id);
         if (rows.isEmpty()) {

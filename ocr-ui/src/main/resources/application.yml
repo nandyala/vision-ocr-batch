@@ -26,6 +26,12 @@ spring:
       max-request-size: 500MB
   jackson:
     default-property-inclusion: always
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # the browser re-checks the UI files on every load, so a new version is always picked up
+          no-cache: true
 
 ui:
   # Local folder with brand assets (logo.svg, licensed font files, fonts.css). Not in git - see README.
