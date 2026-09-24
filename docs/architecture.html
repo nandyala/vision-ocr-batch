@@ -1,0 +1,711 @@
+<title>Vision OCR Architecture</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --bg: #F2F4F1;
+    --surface: #FFFFFF;
+    --store: #E9ECE8;
+    --ink: #17201C;
+    --muted: #56625B;
+    --line: #C3CAC5;
+    --edge: #6B7770;
+    --accent: #0A7652;
+    --accent-soft: #DDEFE6;
+    --ours-wash: #F1F8F4;
+    --azure: #2A62A6;
+    --azure-soft: #E2EBF6;
+    --warn: #9A5F0C;
+    --warn-soft: #F6E9D2;
+    --err: #AE3A2D;
+    --err-soft: #F6E0DC;
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0F1412;
+      --surface: #18201C;
+      --store: #1F2823;
+      --ink: #E2E8E4;
+      --muted: #9AA69F;
+      --line: #36433C;
+      --edge: #8C9992;
+      --accent: #3DBD8A;
+      --accent-soft: #163A2B;
+      --ours-wash: #13201A;
+      --azure: #72A6E2;
+      --azure-soft: #172A3E;
+      --warn: #E2A64C;
+      --warn-soft: #3A2C13;
+      --err: #EB7F70;
+      --err-soft: #3E1F1A;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0F1412;
+    --surface: #18201C;
+    --store: #1F2823;
+    --ink: #E2E8E4;
+    --muted: #9AA69F;
+    --line: #36433C;
+    --edge: #8C9992;
+    --accent: #3DBD8A;
+    --accent-soft: #163A2B;
+    --ours-wash: #13201A;
+    --azure: #72A6E2;
+    --azure-soft: #172A3E;
+    --warn: #E2A64C;
+    --warn-soft: #3A2C13;
+    --err: #EB7F70;
+    --err-soft: #3E1F1A;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.6 var(--body);
+    padding-inline: 16px;
+    padding-block: 32px 64px;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 56px; }
+  h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 700; line-height: 1.1; }
+  h2 { font-size: 24px; font-weight: 600; line-height: 1.25; }
+  p { margin: 0; max-width: 68ch; }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  code { background: var(--store); padding: 1px 5px; border-radius: 4px; }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+  header { display: grid; gap: 16px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .lead { font-size: 17px; color: var(--muted); }
+  .facts {
+    display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 8px 0 0; padding: 0;
+    list-style: none; font-size: 13px; color: var(--muted);
+  }
+  .facts b { color: var(--ink); font-weight: 600; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; }
+  nav a {
+    font-size: 13px; text-decoration: none; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; background: var(--surface);
+  }
+  nav a:hover { border-color: var(--accent); color: var(--accent); }
+
+  section { display: grid; gap: 16px; scroll-margin-top: 16px; }
+  .sec-head { display: grid; gap: 6px; }
+  .sec-head .eyebrow { color: var(--muted); }
+
+  figure { margin: 0; display: grid; gap: 10px; }
+  .canvas {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px; overflow-x: auto;
+  }
+  .canvas svg { display: block; width: 100%; min-width: 860px; height: auto; }
+  figcaption { font-size: 13.5px; color: var(--muted); max-width: 90ch; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 14px; height: 10px; border-radius: 3px; border: 1.5px solid; display: inline-block; }
+  .sw.ours { background: var(--ours-wash); border-color: var(--accent); }
+  .sw.az { background: var(--azure-soft); border-color: var(--azure); }
+  .sw.store { background: var(--store); border-color: var(--line); }
+  .sw.rev { background: var(--warn-soft); border-color: var(--warn); }
+  .sw.err { background: var(--err-soft); border-color: var(--err); }
+
+  ul.notes { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 90ch; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 14px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  th {
+    font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--muted); background: var(--store);
+  }
+  td code { white-space: nowrap; }
+  td.nowrap { white-space: nowrap; }
+
+  /* ---------- diagram vocabulary ---------- */
+  .dg { color: var(--ink); font-family: var(--body); }
+  .dg .c-ours { fill: var(--ours-wash); stroke: var(--accent); stroke-width: 1.3; }
+  .dg .r { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+  .dg .r-ours { fill: var(--surface); stroke: var(--accent); stroke-width: 1.3; }
+  .dg .r-ghost { fill: var(--ours-wash); stroke: var(--accent); stroke-width: 1; opacity: 0.7; }
+  .dg .r-az { fill: var(--azure-soft); stroke: var(--azure); stroke-width: 1.3; }
+  .dg .r-store { fill: var(--store); stroke: var(--line); stroke-width: 1; }
+  .dg .r-dash { fill: var(--surface); stroke: var(--edge); stroke-width: 1; stroke-dasharray: 4 3; }
+  .dg .p-plain { fill: var(--surface); stroke: var(--edge); stroke-width: 1.2; }
+  .dg .p-ok { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.3; }
+  .dg .p-rev { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.3; }
+  .dg .p-err { fill: var(--err-soft); stroke: var(--err); stroke-width: 1.3; }
+  .dg .t { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
+  .dg .th { fill: var(--ink); font-size: 13.5px; font-weight: 600; font-family: var(--display); }
+  .dg .s { fill: var(--muted); font-size: 11px; }
+  .dg .m { font-family: var(--mono); }
+  .dg .ms { fill: var(--muted); font-family: var(--mono); font-size: 10.5px; }
+  .dg .mt { fill: var(--ink); font-family: var(--mono); font-size: 11px; font-weight: 600; }
+  .dg .acc { fill: var(--accent); }
+  .dg .azt { fill: var(--azure); }
+  .dg .revt { fill: var(--warn); }
+  .dg .errt { fill: var(--err); }
+  .dg .e { stroke: var(--edge); stroke-width: 1.4; fill: none; }
+  .dg .e-az { stroke: var(--azure); stroke-width: 1.4; fill: none; }
+  .dg .e-err { stroke: var(--err); stroke-width: 1.4; fill: none; }
+  .dg .e-rev { stroke: var(--warn); stroke-width: 1.4; fill: none; }
+  .dg .e-ok { stroke: var(--accent); stroke-width: 1.4; fill: none; }
+  .dg .el { fill: var(--muted); font-size: 11px; }
+  .dg .ah { fill: var(--edge); }
+  .dg .ah-az { fill: var(--azure); }
+  .dg .ah-err { fill: var(--err); }
+  .dg .ah-rev { fill: var(--warn); }
+  .dg .ah-ok { fill: var(--accent); }
+  .dg .mid { text-anchor: middle; }
+  .dg .end { text-anchor: end; }
+
+  @media (max-width: 640px) {
+    body { font-size: 14.5px; padding-block: 20px 48px; }
+    .wrap { gap: 44px; }
+    .canvas { padding: 10px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    nav a { transition: border-color .15s, color .15s; }
+  }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">vision-ocr-batch &middot; architecture</div>
+  <h1>Vision OCR architecture</h1>
+  <p class="lead">A Spring Batch job reads scanned forms, asks Azure Document Intelligence what kind of document each one is and what it says, then checks every field against rules from a per-doc-type XML file. A Spring Boot demo app runs the same job in-process and lets reviewers correct what the model got wrong.</p>
+  <ul class="facts">
+    <li><b>2</b> Maven modules: <code>ocr-batch</code>, <code>ocr-ui</code></li>
+    <li><b>8</b> job steps, all driven by document status</li>
+    <li><b>1</b> SQL Server schema: <code>ocr</code></li>
+    <li><b>0</b> Java changes to add a doc type</li>
+  </ul>
+  <nav aria-label="Sections">
+    <a href="#context">System context</a>
+    <a href="#pipeline">Job pipeline</a>
+    <a href="#lifecycle">Document status</a>
+    <a href="#mapping">Map &amp; validate</a>
+    <a href="#data">Data model</a>
+    <a href="#ui">Demo UI</a>
+    <a href="#code">Code map</a>
+  </nav>
+  <div class="legend" aria-label="Legend">
+    <span><i class="sw ours"></i>code in this repo</span>
+    <span><i class="sw az"></i>Azure service</span>
+    <span><i class="sw store"></i>storage (database, folders)</span>
+    <span><i class="sw rev"></i>needs a person (REVIEW)</span>
+    <span><i class="sw err"></i>failure (ERROR / FAILED)</span>
+  </div>
+</header>
+
+<!-- ============================ 1. CONTEXT ============================ -->
+<section id="context">
+  <div class="sec-head">
+    <div class="eyebrow">1 &middot; System context</div>
+    <h2>Two entry points, one job</h2>
+  </div>
+  <figure>
+    <div class="canvas">
+      <svg class="dg" viewBox="0 0 1080 548" role="img" aria-label="The demo UI and a scheduler both launch the same docExtractionJob. The job reads files and doc type XML from local folders, calls Azure Document Intelligence, and writes everything to SQL Server schema ocr, which the UI reads back.">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+          <marker id="a1z" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-az"/></marker>
+        </defs>
+
+        <!-- actors & folders (left) -->
+        <rect x="20" y="40" width="180" height="64" rx="6" class="r"/>
+        <text x="32" y="66" class="t">Reviewer / operator</text>
+        <text x="32" y="86" class="s">browser &middot; 127.0.0.1:8080</text>
+
+        <rect x="20" y="200" width="200" height="140" rx="6" class="r-store"/>
+        <text x="32" y="222" class="t">Local folders</text>
+        <rect x="32" y="234" width="176" height="44" rx="4" class="r"/>
+        <text x="44" y="252" class="mt">data/input/</text>
+        <text x="44" y="269" class="s">scans + uploads</text>
+        <rect x="32" y="286" width="176" height="44" rx="4" class="r"/>
+        <text x="44" y="304" class="mt">doctypes/*.xml</text>
+        <text x="44" y="321" class="s">saved by the designer</text>
+
+        <rect x="20" y="430" width="180" height="64" rx="6" class="r"/>
+        <text x="32" y="456" class="t">Scheduler or CLI</text>
+        <text x="32" y="476" class="s">run.sh &middot; e.g. every 15 min</text>
+
+        <!-- ocr-ui -->
+        <rect x="260" y="20" width="320" height="228" rx="8" class="c-ours"/>
+        <text x="276" y="40"><tspan class="mt acc">ocr-ui</tspan><tspan class="s"> &#160;Spring Boot 3.5 demo app</tspan></text>
+        <rect x="280" y="52" width="280" height="40" rx="4" class="r"/>
+        <text x="292" y="69" class="t">Single-page app</text>
+        <text x="292" y="84" class="s">index.html &middot; js/pages/*.js &middot; no build step</text>
+        <rect x="280" y="100" width="280" height="40" rx="4" class="r"/>
+        <text x="292" y="117" class="t">REST controllers <tspan class="ms">/api/*</tspan></text>
+        <text x="292" y="132" class="s">Document &middot; Insights &middot; Operations &middot; Config</text>
+        <rect x="280" y="148" width="280" height="40" rx="4" class="r"/>
+        <text x="292" y="165" class="t">Services</text>
+        <text x="292" y="180" class="s">SQL via JdbcTemplate &middot; doc type XML writer</text>
+        <rect x="280" y="196" width="280" height="40" rx="4" class="r"/>
+        <text x="292" y="213" class="t">JobTrigger</text>
+        <text x="292" y="228" class="s">one run at a time, queues one more</text>
+
+        <!-- ocr-batch -->
+        <rect x="260" y="300" width="320" height="228" rx="8" class="c-ours"/>
+        <text x="276" y="320"><tspan class="mt acc">ocr-batch</tspan><tspan class="s"> &#160;Spring Batch, XML config only</tspan></text>
+        <rect x="280" y="332" width="280" height="40" rx="4" class="r"/>
+        <text x="292" y="349" class="t">docExtractionJob</text>
+        <text x="292" y="364" class="s">8 steps &middot; job-context.xml</text>
+        <rect x="280" y="380" width="280" height="40" rx="4" class="r"/>
+        <text x="292" y="397" class="t">DocTypeRegistry</text>
+        <text x="292" y="412" class="s">one DocTypeConfig bean per doctypes/*.xml</text>
+        <rect x="280" y="428" width="280" height="40" rx="4" class="r"/>
+        <text x="292" y="445" class="t">DocumentRepository</text>
+        <text x="292" y="460" class="s">every status, result, field and error write</text>
+        <rect x="280" y="476" width="280" height="40" rx="4" class="r"/>
+        <text x="292" y="493" class="t">DocIntelClient</text>
+        <text x="292" y="508" class="s">AzureDocIntelClient &middot; submit, poll, retry</text>
+
+        <!-- SQL Server -->
+        <rect x="740" y="20" width="320" height="270" rx="6" class="r-store"/>
+        <text x="756" y="44"><tspan class="th">SQL Server</tspan><tspan class="s"> &#160;schema </tspan><tspan class="ms">ocr</tspan></text>
+        <text x="756" y="74"><tspan class="mt acc">doc_job</tspan><tspan class="s"> &#160;work queue, one row per file</tspan></text>
+        <text x="756" y="98"><tspan class="mt">doc_azure_result</tspan><tspan class="s"> &#160;every Azure call</tspan></text>
+        <text x="756" y="122"><tspan class="mt">doc_field</tspan><tspan class="s"> &#160;one row per field</tspan></text>
+        <text x="756" y="146"><tspan class="mt">doc_field_correction</tspan><tspan class="s"> &#160;reviewer fixes</tspan></text>
+        <text x="756" y="170"><tspan class="mt">doc_status_history</tspan><tspan class="s"> &#160;&#183; </tspan><tspan class="mt">doc_error</tspan></text>
+        <text x="756" y="194"><tspan class="mt">doc_reprocess_request</tspan><tspan class="s"> &#160;operator</tspan></text>
+        <text x="756" y="218"><tspan class="mt">BATCH_*</tspan><tspan class="s"> &#160;Spring Batch run records</tspan></text>
+        <text x="756" y="242"><tspan class="mt">v_doc_field_final</tspan><tspan class="s"> &#160;&#183; </tspan><tspan class="mt">v_doc_&lt;type&gt;</tspan></text>
+        <text x="756" y="266" class="s">views: corrected values win</text>
+
+        <!-- Azure -->
+        <rect x="740" y="410" width="320" height="116" rx="6" class="r-az"/>
+        <text x="756" y="436" class="th">Azure Document Intelligence</text>
+        <text x="756" y="458" class="s">custom classifier: file &#8594; doc type</text>
+        <text x="756" y="478" class="s">one extraction model per doc type</text>
+        <text x="756" y="500" class="ms">e.g. autopay-neural-v2</text>
+
+        <!-- edges -->
+        <path d="M200 72 H278" class="e" marker-end="url(#a1)"/>
+        <text x="240" y="64" class="el mid">HTTP</text>
+
+        <path d="M560 168 H738" class="e" marker-end="url(#a1)"/>
+        <text x="650" y="160" class="el mid">reads, corrections, approvals</text>
+
+        <path d="M280 168 H240 V256 H222" class="e" marker-end="url(#a1)"/>
+        <text x="234" y="190" class="el end">writes</text>
+
+        <path d="M420 236 V330" class="e" marker-end="url(#a1)"/>
+        <text x="430" y="280" class="el">launches the job</text>
+        <text x="430" y="294" class="el">in-process</text>
+
+        <path d="M280 344 H240 V308 H222" class="e" marker-end="url(#a1)"/>
+        <text x="234" y="358" class="el end">reads</text>
+
+        <path d="M200 462 H250 V362 H278" class="e" marker-end="url(#a1)"/>
+        <text x="244" y="416" class="el end">java -jar &#8230; -next</text>
+
+        <path d="M560 448 H660 V262 H738" class="e" marker-end="url(#a1)"/>
+        <text x="652" y="355" class="el mid" transform="rotate(-90 652 355)">status &#183; Azure JSON &#183; fields &#183; errors</text>
+
+        <path d="M560 496 H738" class="e-az" marker-end="url(#a1z)"/>
+        <text x="650" y="488" class="el mid">analyze, then poll</text>
+      </svg>
+    </div>
+    <figcaption>The UI loads the batch module's XML with <code>@ImportResource("classpath:job-context.xml")</code>, so both entry points share the same beans, database, Azure settings and doc types. The UI's <code>ConfigService</code> also reuses <code>DocTypeRegistry</code> and <code>DocIntelClient</code> to list Azure models for the doc type designer.</figcaption>
+  </figure>
+  <ul class="notes">
+    <li><b>The database is the queue.</b> Every step picks documents by <code>doc_job.status</code>. A crashed or stopped run is launched again and continues where it stopped.</li>
+    <li><b>Uploads go through the folder.</b> The UI writes the file into <code>data/input/</code> (or <code>data/input/&lt;DOC_TYPE&gt;/</code> to skip the classifier) and calls <code>JobTrigger</code>. Ingest then picks it up like any scanned file.</li>
+    <li><b>Shared database, own schema.</b> Everything lives in <code>ocr</code>, including Spring Batch's <code>BATCH_*</code> tables. The schema scripts only create missing objects.</li>
+  </ul>
+</section>
+
+<!-- ============================ 2. PIPELINE ============================ -->
+<section id="pipeline">
+  <div class="sec-head">
+    <div class="eyebrow">2 &middot; Job pipeline</div>
+    <h2><code>docExtractionJob</code>, step by step</h2>
+  </div>
+  <figure>
+    <div class="canvas">
+      <svg class="dg" viewBox="0 0 1080 262" role="img" aria-label="Eight steps run in order: view, recovery, ingest, classify, extract, mapValidate, housekeeping, summary. Only classify and extract call Azure, and both run in parallel partitions.">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+          <marker id="a2z" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-az"/></marker>
+        </defs>
+
+        <!-- Azure band -->
+        <rect x="413" y="14" width="262" height="40" rx="6" class="r-az"/>
+        <text x="544" y="39" class="t mid">Azure Document Intelligence</text>
+        <path d="M473 92 V56" class="e-az" marker-end="url(#a2z)"/>
+        <text x="479" y="78" class="el">classify</text>
+        <path d="M607 92 V56" class="e-az" marker-end="url(#a2z)"/>
+        <text x="613" y="78" class="el">analyze</text>
+
+        <!-- partition ghosts -->
+        <rect x="421" y="92" width="120" height="88" rx="6" class="r-ghost"/>
+        <rect x="417" y="96" width="120" height="88" rx="6" class="r-ghost"/>
+        <rect x="555" y="92" width="120" height="88" rx="6" class="r-ghost"/>
+        <rect x="551" y="96" width="120" height="88" rx="6" class="r-ghost"/>
+
+        <!-- steps -->
+        <g>
+          <rect x="11" y="100" width="120" height="88" rx="6" class="r-ours"/>
+          <text x="21" y="120" class="ms">0</text>
+          <text x="21" y="142" class="t">view</text>
+          <text x="21" y="160" class="s">tasklet</text>
+          <text x="21" y="177" class="ms">v_doc_&lt;type&gt;</text>
+        </g>
+        <g>
+          <rect x="145" y="100" width="120" height="88" rx="6" class="r-ours"/>
+          <text x="155" y="120" class="ms">1</text>
+          <text x="155" y="142" class="t">recovery</text>
+          <text x="155" y="160" class="s">tasklet</text>
+          <text x="155" y="177" class="s">retries, requests</text>
+        </g>
+        <g>
+          <rect x="279" y="100" width="120" height="88" rx="6" class="r-ours"/>
+          <text x="289" y="120" class="ms">2</text>
+          <text x="289" y="142" class="t">ingest</text>
+          <text x="289" y="160" class="s">tasklet</text>
+          <text x="289" y="177" class="s">SHA-256 dedupe</text>
+        </g>
+        <g>
+          <rect x="413" y="100" width="120" height="88" rx="6" class="r-ours"/>
+          <text x="423" y="120" class="ms">3</text>
+          <text x="423" y="142" class="t">classify</text>
+          <text x="423" y="160" class="s">partitioned chunk</text>
+          <text x="423" y="177" class="ms acc">&#215; batch.threads</text>
+        </g>
+        <g>
+          <rect x="547" y="100" width="120" height="88" rx="6" class="r-ours"/>
+          <text x="557" y="120" class="ms">4</text>
+          <text x="557" y="142" class="t">extract</text>
+          <text x="557" y="160" class="s">partitioned chunk</text>
+          <text x="557" y="177" class="ms acc">&#215; batch.threads</text>
+        </g>
+        <g>
+          <rect x="681" y="100" width="120" height="88" rx="6" class="r-ours"/>
+          <text x="691" y="120" class="ms">5</text>
+          <text x="691" y="142" class="t">mapValidate</text>
+          <text x="691" y="160" class="s">chunk</text>
+          <text x="691" y="177" class="s">no Azure call</text>
+        </g>
+        <g>
+          <rect x="815" y="100" width="120" height="88" rx="6" class="r-ours"/>
+          <text x="825" y="120" class="ms">6</text>
+          <text x="825" y="142" class="t">housekeeping</text>
+          <text x="825" y="160" class="s">tasklet</text>
+          <text x="825" y="177" class="s">retention</text>
+        </g>
+        <g>
+          <rect x="949" y="100" width="120" height="88" rx="6" class="r-ours"/>
+          <text x="959" y="120" class="ms">7</text>
+          <text x="959" y="142" class="t">summary</text>
+          <text x="959" y="160" class="s">tasklet</text>
+          <text x="959" y="177" class="s">counts to the log</text>
+        </g>
+
+        <!-- sequence arrows -->
+        <path d="M131 144 H143" class="e" marker-end="url(#a2)"/>
+        <path d="M265 144 H277" class="e" marker-end="url(#a2)"/>
+        <path d="M399 144 H411" class="e" marker-end="url(#a2)"/>
+        <path d="M533 144 H545" class="e" marker-end="url(#a2)"/>
+        <path d="M667 144 H679" class="e" marker-end="url(#a2)"/>
+        <path d="M801 144 H813" class="e" marker-end="url(#a2)"/>
+        <path d="M935 144 H947" class="e" marker-end="url(#a2)"/>
+
+        <!-- status changes -->
+        <text x="71" y="214" class="el mid">status change:</text>
+        <text x="205" y="214" class="ms mid"><tspan class="errt">ERROR</tspan> &#8594;</text>
+        <text x="205" y="230" class="ms mid">stage entry</text>
+        <text x="339" y="214" class="ms mid">file &#8594;</text>
+        <text x="339" y="230" class="ms mid">NEW</text>
+        <text x="473" y="214" class="ms mid">NEW &#8594;</text>
+        <text x="473" y="230" class="ms mid">CLASSIFIED</text>
+        <text x="473" y="246" class="ms mid">or <tspan class="revt">REVIEW</tspan></text>
+        <text x="607" y="214" class="ms mid">CLASSIFIED &#8594;</text>
+        <text x="607" y="230" class="ms mid">EXTRACTED</text>
+        <text x="741" y="214" class="ms mid">EXTRACTED &#8594;</text>
+        <text x="741" y="230" class="ms mid acc">COMPLETED</text>
+        <text x="741" y="246" class="ms mid">or <tspan class="revt">REVIEW</tspan></text>
+        <text x="875" y="214" class="el mid">none</text>
+        <text x="1009" y="214" class="el mid">none</text>
+      </svg>
+    </div>
+    <figcaption>Each box is a <code>&lt;name&gt;Step</code> in <code>job-context.xml</code>. Classify and extract split documents by <code>id % batch.threads</code>, and <code>ModPartitioner</code> only creates partitions for slices that have documents waiting, so one upload runs as one partition. Commit interval defaults to 5.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Step</th><th>Bean</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="nowrap">0 view</td><td><code>DocTypeViewTasklet</code></td><td>Recreates one flat view per doc type, <code>ocr.v_doc_&lt;doctype&gt;</code>, with columns from the doc type XML. The only DROP the job ever runs.</td></tr>
+        <tr><td class="nowrap">1 recovery</td><td><code>RecoveryTasklet</code></td><td>Applies pending <code>doc_reprocess_request</code> rows and moves due <code>ERROR</code> documents back to the entry status of the stage that failed.</td></tr>
+        <tr><td class="nowrap">2 ingest</td><td><code>IngestTasklet</code></td><td>Registers new files from <code>input.dir</code> in <code>doc_job</code>. SHA-256 skips duplicates. A sub-folder named after a doc type pre-assigns it.</td></tr>
+        <tr><td class="nowrap">3 classify</td><td><code>ClassifyProcessor</code> &#8594; <code>DocumentStatusWriter</code></td><td>Runs the custom classifier. Unknown type, several types in one file, or low confidence send the document to <code>REVIEW</code>.</td></tr>
+        <tr><td class="nowrap">4 extract</td><td><code>ExtractProcessor</code> &#8594; <code>DocumentStatusWriter</code></td><td>Runs the doc type's extraction model and stores the fields JSON (and optionally the full response, gzipped) in <code>doc_azure_result</code>.</td></tr>
+        <tr><td class="nowrap">5 mapValidate</td><td><code>MapValidateProcessor</code> &#8594; <code>MappedDocumentWriter</code></td><td>Applies the doc type rules to the stored JSON (see section 4) and writes <code>doc_field</code> rows and <code>doc_job.extracted_json</code>.</td></tr>
+        <tr><td class="nowrap">6 housekeeping</td><td><code>HousekeepingTasklet</code></td><td>Clears old full Azure JSON and deletes old history, error and Spring Batch rows, in batches.</td></tr>
+        <tr><td class="nowrap">7 summary</td><td><code>JobSummaryTasklet</code></td><td>Logs counts per doc type and status. Logs never contain field values.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================ 3. LIFECYCLE ============================ -->
+<section id="lifecycle">
+  <div class="sec-head">
+    <div class="eyebrow">3 &middot; Document status</div>
+    <h2>How a document moves through <code>doc_job.status</code></h2>
+  </div>
+  <figure>
+    <div class="canvas">
+      <svg class="dg" viewBox="0 0 1080 300" role="img" aria-label="Status lifecycle: NEW to CLASSIFIED to EXTRACTED to COMPLETED. Classify or map can send a document to REVIEW, and a reviewer approves it to COMPLETED. A failing stage goes to ERROR, which recovery retries, or FAILED, which needs an operator reprocess request.">
+        <defs>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+          <marker id="a3e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-err"/></marker>
+          <marker id="a3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-rev"/></marker>
+          <marker id="a3o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-ok"/></marker>
+        </defs>
+
+        <!-- failure row -->
+        <rect x="250" y="28" width="150" height="40" rx="20" class="p-err"/>
+        <text x="325" y="52" class="mt mid errt">ERROR</text>
+        <rect x="560" y="28" width="150" height="40" rx="20" class="p-err"/>
+        <text x="635" y="52" class="mt mid errt">FAILED</text>
+        <rect x="800" y="28" width="230" height="40" rx="6" class="r-dash"/>
+        <text x="915" y="52" class="mt mid">doc_reprocess_request</text>
+
+        <!-- main row -->
+        <rect x="40" y="130" width="120" height="40" rx="20" class="p-plain"/>
+        <text x="100" y="154" class="mt mid">NEW</text>
+        <rect x="250" y="130" width="150" height="40" rx="20" class="p-plain"/>
+        <text x="325" y="154" class="mt mid">CLASSIFIED</text>
+        <rect x="490" y="130" width="150" height="40" rx="20" class="p-plain"/>
+        <text x="565" y="154" class="mt mid">EXTRACTED</text>
+        <rect x="880" y="130" width="150" height="40" rx="20" class="p-ok"/>
+        <text x="955" y="154" class="mt mid acc">COMPLETED</text>
+
+        <!-- review -->
+        <rect x="700" y="240" width="140" height="40" rx="20" class="p-rev"/>
+        <text x="770" y="264" class="mt mid revt">REVIEW</text>
+
+        <!-- happy path -->
+        <path d="M160 150 H248" class="e" marker-end="url(#a3)"/>
+        <text x="204" y="142" class="el mid">classify</text>
+        <path d="M400 150 H488" class="e" marker-end="url(#a3)"/>
+        <text x="444" y="142" class="el mid">extract</text>
+        <path d="M640 150 H878" class="e-ok" marker-end="url(#a3o)"/>
+        <text x="760" y="142" class="el mid">map: every check passes</text>
+
+        <!-- review paths -->
+        <path d="M100 170 V260 H698" class="e-rev" marker-end="url(#a3r)"/>
+        <text x="400" y="252" class="el mid">classify: unknown type, several types, low confidence</text>
+        <path d="M600 170 L730 238" class="e-rev" marker-end="url(#a3r)"/>
+        <text x="650" y="214" class="el end">map: a field is flagged</text>
+        <path d="M840 260 H955 V172" class="e-ok" marker-end="url(#a3o)"/>
+        <text x="898" y="252" class="el mid">reviewer approves</text>
+
+        <!-- failure paths -->
+        <path d="M100 130 V100 H635 V70" class="e-err" marker-end="url(#a3e)"/>
+        <path d="M325 130 V70" class="e-err" marker-end="url(#a3e)"/>
+        <path d="M565 130 V100" class="e-err"/>
+        <text x="212" y="94" class="el mid">a stage fails</text>
+        <text x="333" y="88" class="el">retryable</text>
+        <text x="643" y="88" class="el">not retryable</text>
+        <path d="M400 48 H558" class="e-err" marker-end="url(#a3e)"/>
+        <text x="480" y="40" class="el mid">retries used up</text>
+        <path d="M710 48 H798" class="e" marker-end="url(#a3)"/>
+        <text x="754" y="40" class="el mid">operator</text>
+        <path d="M250 48 H60 V128" class="e" marker-end="url(#a3)"/>
+        <text x="155" y="40" class="el mid">recovery: retry when due</text>
+      </svg>
+    </div>
+    <figcaption>Retryable means HTTP 408, 429 or 5xx, network errors and timeouts. <code>RetryPolicy</code> sets <code>next_retry_at</code> to 5 min &#215; 2<sup>attempt&#8722;1</sup>, capped at 4 h, for up to 4 attempts. Recovery returns a document to the entry status of the stage that failed (<code>NEW</code>, <code>CLASSIFIED</code> or <code>EXTRACTED</code>); the arrow to <code>NEW</code> stands for all three. A reprocess request is applied the same way by the next run's recovery step, and restarting from <code>MAP</code> reuses the stored Azure JSON at no Azure cost.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================ 4. MAPPING ============================ -->
+<section id="mapping">
+  <div class="sec-head">
+    <div class="eyebrow">4 &middot; Map &amp; validate</div>
+    <h2>Doc type XML turns Azure output into checked fields</h2>
+  </div>
+  <figure>
+    <div class="canvas">
+      <svg class="dg" viewBox="0 0 1080 206" role="img" aria-label="Map and validate: Azure fields JSON and the doc type rules feed a per-field chain of normalize, validate and confidence checks, then cross-field rules, then the writer sets COMPLETED or REVIEW.">
+        <defs>
+          <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+        </defs>
+
+        <path d="M314 32 V24 H766 V32" class="e"/>
+        <text x="540" y="16" class="el mid">for each field listed in the doc type XML</text>
+
+        <rect x="2" y="40" width="140" height="96" rx="6" class="r-store"/>
+        <text x="14" y="64" class="t">Azure fields</text>
+        <text x="14" y="86" class="ms">fields_json</text>
+        <text x="14" y="102" class="s">from doc_azure_result</text>
+
+        <rect x="158" y="40" width="140" height="96" rx="6" class="r-ours"/>
+        <text x="170" y="64" class="t">Doc type rules</text>
+        <text x="170" y="86" class="s">DocTypeConfig bean</text>
+        <text x="170" y="102" class="ms">doctypes/&lt;type&gt;.xml</text>
+
+        <rect x="314" y="40" width="140" height="96" rx="6" class="r-ours"/>
+        <text x="326" y="64" class="t">Normalize</text>
+        <text x="326" y="86" class="s">azureField &#8594; canonical</text>
+        <text x="326" y="102" class="ms">norm.digits, .date &#8230;</text>
+
+        <rect x="470" y="40" width="140" height="96" rx="6" class="r-ours"/>
+        <text x="482" y="64" class="t">Validate</text>
+        <text x="482" y="86" class="s">required, ABA checksum,</text>
+        <text x="482" y="102" class="s">regex, allowed values</text>
+
+        <rect x="626" y="40" width="140" height="96" rx="6" class="r-ours"/>
+        <text x="638" y="64" class="t">Confidence</text>
+        <text x="638" y="86" class="s">below the field's</text>
+        <text x="638" y="102" class="ms">minConfidence</text>
+
+        <rect x="782" y="40" width="140" height="96" rx="6" class="r-ours"/>
+        <text x="794" y="64" class="t">Cross-field</text>
+        <text x="794" y="86" class="s">routing &#8596; bank name,</text>
+        <text x="794" y="102" class="s">fuzzy name match</text>
+
+        <rect x="938" y="40" width="140" height="96" rx="6" class="r-ours"/>
+        <text x="950" y="64" class="t">Write</text>
+        <text x="950" y="86" class="ms">doc_field rows,</text>
+        <text x="950" y="102" class="ms">extracted_json</text>
+
+        <path d="M142 88 H156" class="e" marker-end="url(#a4)"/>
+        <path d="M298 88 H312" class="e" marker-end="url(#a4)"/>
+        <path d="M454 88 H468" class="e" marker-end="url(#a4)"/>
+        <path d="M610 88 H624" class="e" marker-end="url(#a4)"/>
+        <path d="M766 88 H780" class="e" marker-end="url(#a4)"/>
+        <path d="M922 88 H936" class="e" marker-end="url(#a4)"/>
+
+        <!-- outcomes -->
+        <rect x="472" y="152" width="64" height="22" rx="11" class="p-rev"/>
+        <text x="504" y="167" class="ms mid revt">MISSING</text>
+        <rect x="542" y="152" width="66" height="22" rx="11" class="p-rev"/>
+        <text x="575" y="167" class="ms mid revt">INVALID</text>
+        <text x="540" y="194" class="el mid">field_status</text>
+
+        <rect x="641" y="152" width="110" height="22" rx="11" class="p-rev"/>
+        <text x="696" y="167" class="ms mid revt">LOW_CONFIDENCE</text>
+        <text x="696" y="194" class="el mid">field_status</text>
+
+        <rect x="940" y="152" width="76" height="22" rx="11" class="p-ok"/>
+        <text x="978" y="167" class="ms mid acc">COMPLETED</text>
+        <rect x="1020" y="152" width="58" height="22" rx="11" class="p-rev"/>
+        <text x="1049" y="167" class="ms mid revt">REVIEW</text>
+        <text x="1008" y="194" class="el mid">document status</text>
+      </svg>
+    </div>
+    <figcaption>Each flagged field adds a reason such as <code>INVALID:routingNumber:ROUTING_CHECKSUM_FAILED</code> to <code>doc_job.review_reasons</code>; no reasons means <code>COMPLETED</code>. Fields the model returned but the XML doesn't list are kept too (<code>includeUnmappedFields</code>), with whitespace cleanup and the default confidence check only.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Building block</th><th>Beans in <code>pipeline-context.xml</code></th><th>Interface to implement for a new one</th></tr></thead>
+      <tbody>
+        <tr><td>Normalizers</td><td><code>norm.whitespace</code> <code>norm.upper</code> <code>norm.lower</code> <code>norm.digits</code> <code>norm.date</code> <code>norm.amount</code> <code>norm.signature</code>, plus <code>RegexReplaceNormalizer</code></td><td><code>FieldNormalizer</code></td></tr>
+        <tr><td>Validators</td><td><code>val.abaRouting</code> <code>val.isoDate</code> <code>val.signed</code>, plus <code>RegexValidator</code>, <code>AllowedValuesValidator</code></td><td><code>FieldValidator</code></td></tr>
+        <tr><td>Cross-field rules</td><td><code>RoutingBankMatchRule</code> (optional routing CSV), <code>FuzzyMatchRule</code></td><td><code>CrossFieldRule</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================ 5. DATA ============================ -->
+<section id="data">
+  <div class="sec-head">
+    <div class="eyebrow">5 &middot; Data model</div>
+    <h2>Tables in schema <code>ocr</code></h2>
+  </div>
+  <p>The model's value in <code>doc_field</code> is never overwritten. Reviewer fixes go to <code>doc_field_correction</code>, and the views apply them, so downstream systems read reviewed data and corrections survive reprocessing.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Table / view</th><th>Holds</th><th>Written by</th></tr></thead>
+      <tbody>
+        <tr><td><code>doc_job</code></td><td>One row per file: current status, doc type, review reasons, retry state, <code>extracted_json</code>. The work queue.</td><td>every step</td></tr>
+        <tr><td><code>doc_azure_result</code></td><td>Every successful Azure call. <code>fields_json</code> always; gzipped full response only with <code>results.store-full-json=true</code>. <code>is_current</code> marks the latest.</td><td>classify, extract</td></tr>
+        <tr><td><code>doc_field</code></td><td>One row per extracted field, with raw value, cleaned value, confidence, <code>field_status</code>, message.</td><td>mapValidate</td></tr>
+        <tr><td><code>doc_field_correction</code></td><td>Fix, confirm and undo actions, keyed by field name. Also the training-data export.</td><td>demo UI, SQL</td></tr>
+        <tr><td><code>doc_status_history</code></td><td>Append-only audit of every status change: who, when, why.</td><td>all steps, UI</td></tr>
+        <tr><td><code>doc_error</code></td><td>Every failure: stage, attempt, HTTP status, retryable.</td><td>writers, ingest</td></tr>
+        <tr><td><code>doc_reprocess_request</code></td><td>"Re-run these documents from CLASSIFY, EXTRACT or MAP."</td><td>operators, UI</td></tr>
+        <tr><td><code>v_doc_field_final</code></td><td>All fields of all documents, correction wins over model value.</td><td>view</td></tr>
+        <tr><td><code>v_doc_&lt;doctype&gt;</code></td><td>One row per document, one column per field in the doc type XML.</td><td>view step</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================ 6. UI ============================ -->
+<section id="ui">
+  <div class="sec-head">
+    <div class="eyebrow">6 &middot; Demo UI</div>
+    <h2>Screens, endpoints and services in <code>ocr-ui</code></h2>
+  </div>
+  <p>A plain JavaScript single-page app (<code>core.js</code>, <code>app.js</code>, one module per page in <code>js/pages/</code>) calls four REST controllers. Upload, retry-now, reprocess and "run job" all end in <code>JobTrigger.trigger()</code>. The server binds to <code>127.0.0.1</code> and has no login; the reviewer name comes from the header field.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Screen</th><th>Page module</th><th>Endpoints</th><th>Service</th></tr></thead>
+      <tbody>
+        <tr><td>Overview</td><td><code>overview.js</code></td><td><code>GET /api/overview</code></td><td><code>InsightsService</code></td></tr>
+        <tr><td>Upload</td><td><code>upload.js</code></td><td><code>POST /api/uploads</code>, <code>/uploads/status</code></td><td><code>DocumentService</code> + <code>JobTrigger</code></td></tr>
+        <tr><td>Review queue</td><td><code>review.js</code></td><td><code>GET /api/review-queue</code></td><td><code>DocumentService</code></td></tr>
+        <tr><td>Document</td><td><code>document.js</code></td><td><code>/api/documents/{id}</code> + <code>/pages</code>, <code>/file</code>, <code>/corrections</code>, <code>/approve</code>, <code>/reopen</code>, <code>/reprocess</code></td><td><code>DocumentService</code></td></tr>
+        <tr><td>Documents</td><td><code>documents.js</code></td><td><code>GET /api/documents</code></td><td><code>DocumentService</code></td></tr>
+        <tr><td>Data explorer</td><td><code>data.js</code></td><td><code>/api/data/{docType}</code>, <code>/export</code></td><td><code>DataService</code></td></tr>
+        <tr><td>Model insights</td><td><code>insights.js</code></td><td><code>/api/insights/fields</code>, <code>/api/corrections</code>, <code>/stats</code>, <code>/export</code></td><td><code>InsightsService</code></td></tr>
+        <tr><td>Operations</td><td><code>operations.js</code></td><td><code>/api/job</code>, <code>/job/run</code>, <code>/jobs</code>, <code>/queue</code>, <code>/errors</code>, <code>/reprocess-requests</code></td><td><code>OperationsService</code> + <code>JobTrigger</code></td></tr>
+        <tr><td>Configuration</td><td><code>config.js</code>, <code>doctype.js</code>, <code>designer.js</code></td><td><code>/api/config/*</code>, <code>/api/meta</code></td><td><code>ConfigService</code> (uses <code>DocTypeRegistry</code>, <code>DocIntelClient</code>, <code>DocTypeXml</code>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================ 7. CODE MAP ============================ -->
+<section id="code">
+  <div class="sec-head">
+    <div class="eyebrow">7 &middot; Code map</div>
+    <h2>Where things live</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Path</th><th>Contents</th></tr></thead>
+      <tbody>
+        <tr><td><code>ocr-batch/src/main/resources/job-context.xml</code></td><td>Entry point: job and steps. Imports infrastructure, pipeline, Azure and all doc type XML files.</td></tr>
+        <tr><td><code>&#8230;/infrastructure-context.xml</code></td><td>Hikari datasource, transaction manager, <code>SchemaInitializer</code>, job repository, launcher, task executor.</td></tr>
+        <tr><td><code>&#8230;/pipeline-context.xml</code></td><td>Readers, processors, writers, <code>RetryPolicy</code>, and the shared normalizer and validator beans.</td></tr>
+        <tr><td><code>&#8230;/doctypes/*.xml</code></td><td>One file per doc type. <code>auto-pay-auth.xml</code> ships in the jar; <code>./doctypes/</code> adds more at run time.</td></tr>
+        <tr><td><code>com.visionocr.azure</code></td><td><code>DocIntelClient</code> (test seam) and <code>AzureDocIntelClient</code>.</td></tr>
+        <tr><td><code>com.visionocr.batch</code></td><td>Tasklets, processors, writers, <code>ModPartitioner</code>, <code>RetryPolicy</code>.</td></tr>
+        <tr><td><code>com.visionocr.config</code></td><td><code>DocTypeConfig</code>, <code>FieldMapping</code>, <code>DocTypeRegistry</code>, <code>SchemaInitializer</code>.</td></tr>
+        <tr><td><code>com.visionocr.mapping</code> / <code>.validation</code></td><td><code>FieldMappingService</code>, normalizers, validators and cross-field rules.</td></tr>
+        <tr><td><code>com.visionocr.repository</code></td><td><code>DocumentRepository</code>: every pipeline write.</td></tr>
+        <tr><td><code>com.visionocr.domain</code> / <code>.util</code></td><td>Document records and statuses; JSON helper.</td></tr>
+        <tr><td><code>ocr-ui/src/main/java/com/visionocr/ui</code></td><td><code>web/</code> controllers, <code>service/</code> services, <code>job/JobTrigger</code>, <code>support/</code>.</td></tr>
+        <tr><td><code>ocr-ui/src/main/resources/static</code></td><td>The single-page app: <code>index.html</code>, <code>css/</code>, <code>js/</code>.</td></tr>
+        <tr><td><code>ops/</code>, <code>scripts/</code></td><td>Operator SQL, demo reset scripts, <code>azure-train.sh</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</div>
