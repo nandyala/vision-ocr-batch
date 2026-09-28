@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.Ordered;
@@ -37,6 +38,7 @@ public class ApiAccessFilter extends OncePerRequestFilter {
 
     private final Map<String, byte[]> keys = new LinkedHashMap<>();   // client -> key
 
+    @Autowired        // two constructors: tell Spring which one to use (the other is for tests)
     public ApiAccessFilter(Environment env) {
         this(Binder.get(env).bind("api.keys", Bindable.mapOf(String.class, String.class)).orElse(Map.of()));
     }
