@@ -1,7 +1,8 @@
 # Demo UI (Spring Boot). Batch settings (db.*, azure.*, input.*, ...) come from ocr-batch's
 # application.properties and your ./application-local.properties - nothing to repeat here.
 server:
-  # 127.0.0.1 = only this computer. The demo has no login: use 0.0.0.0 only on a trusted network.
+  # 127.0.0.1 = only this computer. 0.0.0.0 opens the external REST API (/api/v1, API key required) to the
+  # network; the demo UI itself still only answers requests from this computer.
   address: 127.0.0.1
   port: 8080
   compression:
@@ -22,8 +23,9 @@ spring:
       enabled: false
   servlet:
     multipart:
-      max-file-size: 200MB
-      max-request-size: 500MB
+      # same limit as the job (input.max-file-mb), so the UI never promises more than the server accepts
+      max-file-size: ${input.max-file-mb:500}MB
+      max-request-size: 1GB
   jackson:
     default-property-inclusion: always
   web:

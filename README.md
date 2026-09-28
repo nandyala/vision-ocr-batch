@@ -243,6 +243,42 @@ Without the font the UI uses Segoe UI / system fonts.
 * The reviewer name typed in the header is stored with every correction and approval (audit), but it is
   not authenticated.
 * The UI never returns file paths, the Azure key or the DB password.
+* Only requests from this computer reach the UI, even with `server.address=0.0.0.0`; from the network
+  only the external REST API (`/api/v1`, API key) answers.
+
+### External REST API (`/api/v1`)
+
+For other systems that want to send documents and read the results. Asynchronous: send a file, get a
+`ref` (the file's SHA-256), ask for the result until `final` is `true`.
+
+1. Give each calling system a key in `application-local.properties` (or env var `API_KEYS_CRM`):
+   `api.keys.crm=<openssl rand -hex 24>`. No keys = the API answers 401.
+2. To accept calls from other machines set `server.address=0.0.0.0` (the demo UI stays local-only).
+   In production put it behind the bank's API gateway (OAuth2) instead of shared keys.
+
+| Call | Result |
+|---|---|
+| `POST /api/v1/documents` (multipart `file`, optional `docType`, default = detect) | `202` new, `200` same file sent before (safe to retry): the result below |
+| `GET /api/v1/documents/{ref}` (`ref` = SHA-256 or document id) | status, fields with final values (reviewer corrections applied); `Retry-After` while not final |
+| `GET /api/v1/doc-types` | doc types and their fields |
+
+```bash
+KEY=...   # api.keys.crm
+curl -s -H "X-API-Key: $KEY" -F file=@paystub.pdf -F docType=PAY_STUB http://localhost:8080/api/v1/documents
+curl -s -H "X-API-Key: $KEY" http://localhost:8080/api/v1/documents/<ref>
+```
+
+```json
+{ "ref": "9f2c…", "documentId": 1042, "status": "COMPLETED", "final": true, "docType": "PAY_STUB",
+  "confidence": 0.94, "reviewReasons": [],
+  "fields": { "currentPeriodNetPay": { "value": "2450.18", "confidence": 0.91, "status": "OK",
+                                       "reviewed": true, "corrected": true } },
+  "updatedAt": "2026-09-28T17:40:12" }
+```
+
+`status`: `QUEUED` (received, not picked up yet), `PROCESSING`, `IN_REVIEW` (waiting for a reviewer),
+`COMPLETED`, `FAILED`. Errors: `{"error": "..."}` with 400 (bad file / unknown doc type), 401 (key), 404
+(unknown ref), 413 (too large). The sending system shows up in the UI as the file name prefix `api-<client>_`.
 
 ## Viewing the extracted data
 

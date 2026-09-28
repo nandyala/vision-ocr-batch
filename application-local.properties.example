@@ -30,3 +30,10 @@ db.user=<sql login>
 db.password=<password>
 # true = create missing ocr.* objects at startup (create-only); false = DBA ran the scripts
 db.init=true
+
+
+# ---- External REST API (demo UI app, /api/v1) ----
+# One key per calling system: api.keys.<client>=<random key, at least 24 characters>. No keys = API off.
+# The client name is sent with each document (stored file name api-<client>_...). Generate a key e.g. with:
+#   openssl rand -hex 24
+#api.keys.crm=
