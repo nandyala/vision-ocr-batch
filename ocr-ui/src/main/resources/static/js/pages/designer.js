@@ -14,7 +14,9 @@ const SUGGEST = {
 // imported with rules and marked required (the rest is still stored when "keep fields without rules" is on).
 const PREBUILT = {
   'prebuilt-idDocument': { label: "Prebuilt: ID documents (driver's licence, passport)", kind: 'idDocument.driverLicense',
-    key: ['FirstName', 'LastName', 'DocumentNumber', 'DateOfBirth', 'DateOfExpiration', 'Address'] }
+    key: ['FirstName', 'LastName', 'DocumentNumber', 'DateOfBirth', 'DateOfExpiration', 'Address'] },
+  'prebuilt-payStub.us': { label: 'Prebuilt: US pay stubs', kind: null,
+    key: ['EmployeeName', 'EmployerName', 'PayDate', 'PayPeriodStartDate', 'PayPeriodEndDate', 'CurrentPeriodGrossPay', 'CurrentPeriodNetPay'] }
 };
 const prebuiltOptions = () => Object.entries(PREBUILT).map(([id, p]) => '<option value="' + id + '">' + esc(p.label) + '</option>').join('');
 
@@ -197,7 +199,7 @@ export async function mount(el, ctx) {
     if (!spec.modelId) { toast('Enter the Azure model id in step 1 first', 'error'); return; }
     try {
       const pre = PREBUILT[spec.modelId];
-      const fields = await api('/api/config/models/' + encodeURIComponent(spec.modelId) + '/fields' + (pre ? '?kind=' + encodeURIComponent(pre.kind) : ''));
+      const fields = await api('/api/config/models/' + encodeURIComponent(spec.modelId) + '/fields' + (pre && pre.kind ? '?kind=' + encodeURIComponent(pre.kind) : ''));
       const have = new Set(spec.fields.map(f => f.azureField));
       let added = 0;
       Object.entries(fields).forEach(([name, type]) => {

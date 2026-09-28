@@ -357,6 +357,8 @@ model* adds FirstName, LastName, DocumentNumber, DateOfBirth, DateOfExpiration a
 (DateOfExpiration also gets `val.notExpired`); every other field the model returns is still stored. Without a
 classifier, choose the doc type on the Upload page (or use the `input/DRIVER_LICENSE/` folder), otherwise the
 file is treated as `classify.default-doc-type`. Prebuilt models cost less per page than custom ones.
+`prebuilt-payStub.us` (US pay stubs) works the same way: the import adds employee and employer name, pay date,
+pay period and current gross/net pay as required fields; the SSN is stored and masked in the UI.
 
 Reusable building blocks (defined in `pipeline-context.xml`):
 `norm.whitespace`, `norm.upper`, `norm.lower`, `norm.digits`, `norm.date`, `norm.amount`,
