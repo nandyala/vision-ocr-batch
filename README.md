@@ -280,6 +280,10 @@ curl -s -H "X-API-Key: $KEY" http://localhost:8080/api/v1/documents/<ref>
 `COMPLETED`, `FAILED`. Errors: `{"error": "..."}` with 400 (bad file / unknown doc type), 401 (key), 404
 (unknown ref), 413 (too large). The sending system shows up in the UI as the file name prefix `api-<client>_`.
 
+**Bruno collection:** open the `bruno/` folder in [Bruno](https://www.usebruno.com/), pick the `local`
+environment, set the secret `apiKey`, put a scan at `bruno/samples/sample.pdf` (git-ignored), then run
+*Submit document* → *Get document*. Each request has tests; *Wrong key is rejected* checks the 401.
+
 ## Viewing the extracted data
 
 Everything the job produces is stored in schema `ocr` of the SQL Server database. Open it with

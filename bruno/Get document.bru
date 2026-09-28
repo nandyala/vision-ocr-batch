@@ -1,0 +1,25 @@
+meta {
+  name: Get document
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/documents/{{ref}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("200", function () {
+    expect(res.status).to.equal(200);
+  });
+  test("known status", function () {
+    expect(res.body.status).to.be.oneOf(["QUEUED", "PROCESSING", "IN_REVIEW", "COMPLETED", "FAILED"]);
+  });
+}
+
+docs {
+  `ref` is set by "Submit document" (or type a SHA-256 / document id). Poll until `final` is true;
+  `IN_REVIEW` waits for a reviewer in the UI. Field values include reviewer corrections.
+}

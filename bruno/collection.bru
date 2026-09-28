@@ -1,0 +1,14 @@
+headers {
+  X-API-Key: {{apiKey}}
+}
+
+docs {
+  # Vision OCR - external REST API (/api/v1)
+
+  1. Pick the **local** environment and set the secret `apiKey` to your `api.keys.<client>` value
+     (secrets stay on your machine, they are not written to these files).
+  2. Put a scan at `bruno/samples/sample.pdf` (the folder is git-ignored - never commit real documents).
+  3. Run **Submit document**, then **Get document** until `final` is true.
+
+  See README "External REST API".
+}

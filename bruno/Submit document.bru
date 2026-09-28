@@ -1,0 +1,37 @@
+meta {
+  name: Submit document
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/documents
+  body: multipartForm
+  auth: none
+}
+
+body:multipart-form {
+  file: @file(samples/sample.pdf)
+  docType: {{docType}}
+}
+
+script:post-response {
+  // remember the ref for "Get document"
+  if (res.body && res.body.ref) {
+    bru.setVar("ref", res.body.ref);
+  }
+}
+
+tests {
+  test("202 new or 200 already sent", function () {
+    expect(res.status).to.be.oneOf([200, 202]);
+  });
+  test("returns a ref", function () {
+    expect(res.body.ref).to.match(/^[0-9a-f]{64}$/);
+  });
+}
+
+docs {
+  Sends `samples/sample.pdf`. `docType` = AUTO (detect) or a doc type name, e.g. PAY_STUB, DRIVER_LICENSE
+  (change it in the environment). Sending the same file again returns 200 with the existing document.
+}

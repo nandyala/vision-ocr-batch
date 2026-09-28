@@ -1,0 +1,21 @@
+meta {
+  name: Wrong key is rejected
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/doc-types
+  body: none
+  auth: none
+}
+
+headers {
+  X-API-Key: not-a-valid-key
+}
+
+tests {
+  test("401", function () {
+    expect(res.status).to.equal(401);
+  });
+}
