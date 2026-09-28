@@ -70,7 +70,9 @@ export async function mount(el, ctx) {
       '<label class="field-label">Description<input class="input" data-k="description" value="' + esc(spec.description) + '" maxlength="200" placeholder="Card dispute form"></label>' +
       '<label class="field-label">Azure model id <span class="hint">a custom model trained in Document Intelligence Studio, or a prebuilt one such as prebuilt-idDocument</span>' +
       '<span class="row" style="flex-wrap:nowrap"><input class="input mono" data-k="modelId" list="models" value="' + esc(spec.modelId) + '" maxlength="64" placeholder="dispute-neural-v1">' +
-      '<button class="btn btn--secondary btn--sm" type="button" id="browse">' + icon('layers', 15) + 'Browse</button></span><datalist id="models">' + prebuiltOptions() + '</datalist><span class="hint" id="models-msg"></span></label>' +
+      '<button class="btn btn--secondary btn--sm" type="button" id="browse">' + icon('layers', 15) + 'Browse</button></span><datalist id="models">' + prebuiltOptions() + '</datalist>' +
+      '<span class="chips" style="margin-top:6px">' + Object.entries(PREBUILT).map(([id, p]) => '<button class="chip" type="button" data-model="' + id + '" aria-pressed="' + (spec.modelId === id) + '">' + esc(p.label) + '</button>').join('') + '</span>' +
+      '<span class="hint" id="models-msg"></span></label>' +
       '<label class="field-label">Classifier labels <span class="hint">class names in the Azure classifier, comma separated (optional)</span>' +
       '<input class="input mono" data-k="classifierLabels" value="' + esc(spec.classifierLabels.join(', ')) + '" placeholder="dispute_form"></label>' +
       '<label class="field-label">Min. classification confidence (%)<input class="input" type="number" min="0" max="100" data-k="minClassifyConfidence" data-pct value="' + Math.round(spec.minClassifyConfidence * 100) + '"></label>' +
@@ -146,6 +148,8 @@ export async function mount(el, ctx) {
     if (rm) { spec.fields.splice(Number(rm.dataset.remove), 1); render(); }
     if (e.target.closest('#import')) importFields();
     if (e.target.closest('#browse')) browseModels();
+    const pick = e.target.closest('[data-model]');
+    if (pick) { spec.modelId = pick.dataset.model; render(); }
   });
   el.querySelector('#steps').addEventListener('click', e => { const s = e.target.closest('[data-step]'); if (s) goStep(Number(s.dataset.step)); });
   el.querySelector('#back').addEventListener('click', () => goStep(step - 1));
