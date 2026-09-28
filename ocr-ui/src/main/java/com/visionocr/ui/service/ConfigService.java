@@ -64,7 +64,8 @@ public class ConfigService {
             Map.entry("norm.amount", "Amount \u2192 1234.56"),
             Map.entry("val.abaRouting", "Valid US routing number (ABA checksum)"),
             Map.entry("val.isoDate", "Is a date (yyyy-MM-dd)"),
-            Map.entry("val.signed", "Must be signed"));
+            Map.entry("val.signed", "Must be signed"),
+            Map.entry("val.notExpired", "Date not in the past (not expired)"));
 
     private final ApplicationContext context;
     private final DocTypeRegistry registry;
@@ -345,8 +346,8 @@ public class ConfigService {
         return docIntelClient.listCustomModels();
     }
 
-    public Map<String, String> modelFields(String modelId) {
-        return docIntelClient.modelFields(modelId);
+    public Map<String, String> modelFields(String modelId, String kind) {
+        return docIntelClient.modelFields(modelId, kind);
     }
 
     // ------------------------------------------------------------------ settings

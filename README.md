@@ -351,9 +351,16 @@ the same XML into the `doctypes/` folder (setting `doctypes.dir`), activates it 
 and the batch job loads it at its next start. Move the file into `ocr-batch/src/main/resources/doctypes/`
 to ship it inside the jar.
 
+**Prebuilt Azure models (no training).** `modelId` can also be one of Azure's prebuilt models. Example,
+driver's licences: in the designer pick `prebuilt-idDocument` from the model list, then *Import from Azure
+model* adds FirstName, LastName, DocumentNumber, DateOfBirth, DateOfExpiration and Address as required fields
+(DateOfExpiration also gets `val.notExpired`); every other field the model returns is still stored. Without a
+classifier, choose the doc type on the Upload page (or use the `input/DRIVER_LICENSE/` folder), otherwise the
+file is treated as `classify.default-doc-type`. Prebuilt models cost less per page than custom ones.
+
 Reusable building blocks (defined in `pipeline-context.xml`):
 `norm.whitespace`, `norm.upper`, `norm.lower`, `norm.digits`, `norm.date`, `norm.amount`,
-`val.abaRouting`, `val.isoDate`, `val.signed`, plus the `RegexReplaceNormalizer`, `RegexValidator`,
+`val.abaRouting`, `val.isoDate`, `val.signed`, `val.notExpired`, plus the `RegexReplaceNormalizer`, `RegexValidator`,
 `AllowedValuesValidator`, `FuzzyMatchRule` and `RoutingBankMatchRule` classes.
 You only write Java for a genuinely new rule: implement `FieldNormalizer`, `FieldValidator` or
 `CrossFieldRule`, then declare it as a bean.

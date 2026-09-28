@@ -29,6 +29,14 @@ public interface DocIntelClient {
 
     /** Fields a model returns: field name -> field type (string, date, signature...). Used by the demo UI. */
     default Map<String, String> modelFields(String modelId) {
+        return modelFields(modelId, null);
+    }
+
+    /**
+     * Same, limited to one of the model's document kinds (e.g. "idDocument.driverLicense" of prebuilt-idDocument).
+     * Unknown or null kind = fields of all kinds.
+     */
+    default Map<String, String> modelFields(String modelId, String docKind) {
         throw new UnsupportedOperationException("Model details are not supported by " + getClass().getSimpleName());
     }
 

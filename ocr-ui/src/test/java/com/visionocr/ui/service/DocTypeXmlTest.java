@@ -37,6 +37,7 @@ class DocTypeXmlTest {
     void rejectsInvalidInput() {
         assertThrows(IllegalArgumentException.class, () -> DocTypeXml.validate(spec("bad name", null), BEANS));
         assertThrows(IllegalArgumentException.class, () -> DocTypeXml.validate(spec("DISPUTE", "${db.password}"), BEANS));
+        assertThrows(IllegalArgumentException.class, () -> DocTypeXml.validate(spec("DISPUTE", "#{T(java.lang.Runtime).getRuntime()}"), BEANS));
         assertThrows(IllegalArgumentException.class, () -> DocTypeXml.validate(spec("DISPUTE", null, field("A", "([")), BEANS));
         assertThrows(IllegalArgumentException.class, () -> DocTypeXml.validate(spec("DISPUTE", null, field("A", null), field("A", null)), BEANS));
         DocTypeSpec.Field unknown = new DocTypeSpec.Field("A", null, false, 0.0, List.of("norm.nope"), List.of(), null, null, null, null);

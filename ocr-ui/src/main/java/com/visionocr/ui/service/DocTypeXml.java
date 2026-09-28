@@ -219,8 +219,8 @@ public final class DocTypeXml {
             return;
         }
         require(s.length() <= max, what + " is too long (max " + max + " characters)");
-        // ${...} would be read as a property placeholder when the file is loaded at startup
-        require(!s.contains("${"), what + " must not contain ${");
+        // ${...} is a property placeholder and #{...} an expression that Spring would run when the file is loaded
+        require(!s.contains("${") && !s.contains("#{"), what + " must not contain ${ or #{");
         require(s.chars().noneMatch(c -> c < 0x20 && c != '\t'), what + " must not contain control characters");
     }
 

@@ -130,11 +130,15 @@ public class AzureDocIntelClient implements DocIntelClient {
     }
 
     @Override
-    public Map<String, String> modelFields(String modelId) {
+    public Map<String, String> modelFields(String modelId, String docKind) {
         DocumentModelDetails model = adminClient.getModel(modelId);
         Map<String, String> fields = new LinkedHashMap<>();
         if (model.getDocumentTypes() != null) {
-            for (DocumentTypeDetails type : model.getDocumentTypes().values()) {
+            Map<String, DocumentTypeDetails> kinds = model.getDocumentTypes();
+            if (docKind != null && kinds.containsKey(docKind)) {
+                kinds = Map.of(docKind, kinds.get(docKind));
+            }
+            for (DocumentTypeDetails type : kinds.values()) {
                 if (type.getFieldSchema() == null) {
                     continue;
                 }

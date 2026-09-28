@@ -166,6 +166,7 @@
         <constructor-arg value="\d{4}-\d{2}-\d{2}"/>
         <constructor-arg value="NOT_A_DATE"/>
     </bean>
+    <bean id="val.notExpired" class="com.visionocr.validation.NotExpiredValidator"/>
     <bean id="val.signed" class="com.visionocr.validation.AllowedValuesValidator">
         <constructor-arg>
             <list><value>signed</value></list>

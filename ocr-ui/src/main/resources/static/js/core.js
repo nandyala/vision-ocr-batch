@@ -108,7 +108,7 @@ export function bytes(n) {
   if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
   return (n / 1024 / 1024).toFixed(1) + ' MB';
 }
-export function isSensitive(name) { return /(account|acct).?(number|no|num)|routing|ssn|tax.?id|card.?number|iban/i.test(name || ''); }
+export function isSensitive(name) { return /(account|acct).?(number|no|num)|routing|ssn|tax.?id|card.?number|iban|licen[cs]e.?(number|no)|document.?number|birth|dob/i.test(name || ''); }
 export function mask(v) { const s = String(v || ''); return s.length <= 4 ? '••••' : '•••• ' + s.slice(-4); }
 export function abaValid(v) {
   const d = String(v || '').replace(/\D/g, '');

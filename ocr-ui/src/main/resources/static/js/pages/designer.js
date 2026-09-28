@@ -10,6 +10,14 @@ const SUGGEST = {
   string: { normalizers: ['norm.whitespace'], validators: [] }
 };
 
+// Azure's ready-made models (no training). kind = which document kind to import fields from; key = fields
+// imported with rules and marked required (the rest is still stored when "keep fields without rules" is on).
+const PREBUILT = {
+  'prebuilt-idDocument': { label: "Prebuilt: ID documents (driver's licence, passport)", kind: 'idDocument.driverLicense',
+    key: ['FirstName', 'LastName', 'DocumentNumber', 'DateOfBirth', 'DateOfExpiration', 'Address'] }
+};
+const prebuiltOptions = () => Object.entries(PREBUILT).map(([id, p]) => '<option value="' + id + '">' + esc(p.label) + '</option>').join('');
+
 export async function mount(el, ctx) {
   const mode = ctx.params.mode || 'new';            // new | edit | copy
   const catalog = await api('/api/config/catalog');
@@ -58,9 +66,9 @@ export async function mount(el, ctx) {
       '<label class="field-label">Name <span class="hint">capital letters, digits, _ (e.g. DISPUTE_FORM). Also the input sub-folder name.</span>' +
       '<input class="input mono" data-k="docType" value="' + esc(spec.docType) + '"' + (mode === 'edit' ? ' disabled' : '') + ' maxlength="50" placeholder="DISPUTE_FORM"></label>' +
       '<label class="field-label">Description<input class="input" data-k="description" value="' + esc(spec.description) + '" maxlength="200" placeholder="Card dispute form"></label>' +
-      '<label class="field-label">Azure model id <span class="hint">the custom extraction model trained in Document Intelligence Studio</span>' +
+      '<label class="field-label">Azure model id <span class="hint">a custom model trained in Document Intelligence Studio, or a prebuilt one such as prebuilt-idDocument</span>' +
       '<span class="row" style="flex-wrap:nowrap"><input class="input mono" data-k="modelId" list="models" value="' + esc(spec.modelId) + '" maxlength="64" placeholder="dispute-neural-v1">' +
-      '<button class="btn btn--secondary btn--sm" type="button" id="browse">' + icon('layers', 15) + 'Browse</button></span><datalist id="models"></datalist><span class="hint" id="models-msg"></span></label>' +
+      '<button class="btn btn--secondary btn--sm" type="button" id="browse">' + icon('layers', 15) + 'Browse</button></span><datalist id="models">' + prebuiltOptions() + '</datalist><span class="hint" id="models-msg"></span></label>' +
       '<label class="field-label">Classifier labels <span class="hint">class names in the Azure classifier, comma separated (optional)</span>' +
       '<input class="input mono" data-k="classifierLabels" value="' + esc(spec.classifierLabels.join(', ')) + '" placeholder="dispute_form"></label>' +
       '<label class="field-label">Min. classification confidence (%)<input class="input" type="number" min="0" max="100" data-k="minClassifyConfidence" data-pct value="' + Math.round(spec.minClassifyConfidence * 100) + '"></label>' +
@@ -179,8 +187,8 @@ export async function mount(el, ctx) {
     try {
       models = models || await api('/api/config/models');
       const ids = Object.keys(models);
-      body.querySelector('#models').innerHTML = ids.map(id => '<option value="' + esc(id) + '">' + esc(models[id] || '') + '</option>').join('');
-      msg.textContent = ids.length ? ids.length + ' custom model(s) found - pick one from the list' : 'No custom models on this resource';
+      body.querySelector('#models').innerHTML = prebuiltOptions() + ids.map(id => '<option value="' + esc(id) + '">' + esc(models[id] || '') + '</option>').join('');
+      msg.textContent = (ids.length ? ids.length + ' custom model(s)' : 'No custom models') + ' plus prebuilt ones - pick one from the list';
       body.querySelector('[data-k="modelId"]').focus();
     } catch (e) { msg.textContent = 'Could not list models: ' + e.message; }
   }
@@ -188,17 +196,20 @@ export async function mount(el, ctx) {
   async function importFields() {
     if (!spec.modelId) { toast('Enter the Azure model id in step 1 first', 'error'); return; }
     try {
-      const fields = await api('/api/config/models/' + encodeURIComponent(spec.modelId) + '/fields');
+      const pre = PREBUILT[spec.modelId];
+      const fields = await api('/api/config/models/' + encodeURIComponent(spec.modelId) + '/fields' + (pre ? '?kind=' + encodeURIComponent(pre.kind) : ''));
       const have = new Set(spec.fields.map(f => f.azureField));
       let added = 0;
       Object.entries(fields).forEach(([name, type]) => {
-        if (have.has(name)) return;
+        if (have.has(name) || (pre && !pre.key.includes(name))) return;
         const s = SUGGEST[type] || SUGGEST.string;
         const f = newField(name);
         f.normalizers = s.normalizers.filter(id => catalog.normalizers.some(c => c.id === id));
         f.validators = s.validators.filter(id => catalog.validators.some(c => c.id === id));
         if (/routing|aba/i.test(name) && catalog.validators.some(c => c.id === 'val.abaRouting')) { f.normalizers = ['norm.digits']; f.validators = ['val.abaRouting']; }
         if (type === 'signature' || /signature/i.test(name)) f.minConfidence = 0;
+        if (/expir/i.test(name) && catalog.validators.some(c => c.id === 'val.notExpired')) f.validators.push('val.notExpired');
+        if (pre) f.required = true;
         spec.fields.push(f); added++;
       });
       toast(added ? added + ' field(s) imported from ' + spec.modelId + ' - review the suggested rules' : 'All fields of the model are already listed', 'ok');

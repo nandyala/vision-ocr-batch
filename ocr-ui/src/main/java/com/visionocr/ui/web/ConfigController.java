@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -103,8 +104,9 @@ public class ConfigController {
     }
 
     @GetMapping("/config/models/{modelId}/fields")
-    public Map<String, String> modelFields(@PathVariable("modelId") String modelId) {
-        return config.modelFields(modelId);
+    public Map<String, String> modelFields(@PathVariable("modelId") String modelId,
+                                           @RequestParam(name = "kind", required = false) String kind) {
+        return config.modelFields(modelId, kind);
     }
 
     @GetMapping("/config/settings")
